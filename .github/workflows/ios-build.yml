@@ -20,11 +20,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Expo SDK 57 / React Native requires Xcode >= 16.1 (pod install fails otherwise).
+      # Expo SDK 57 / React Native 0.86 requires Xcode >= 16.1 (pod install fails
+      # otherwise), but Xcode 17's Swift 6 compiler is stricter about C++ interop
+      # and fails to build expo-modules-jsi's RuntimeScheduler.h ("cannot be
+      # annotated with SWIFT_RETURNS_RETAINED... not a SWIFT_SHARED_REFERENCE
+      # type"). Pin to a 16.x release until Expo ships a fix for Xcode 17.
       - name: Select Xcode 16
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: "16.4"
 
       - name: Print Xcode version
         run: xcodebuild -version
