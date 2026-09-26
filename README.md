@@ -1,0 +1,80 @@
+# Tilawah
+
+A vintage cassette-themed Quran audio player, built with Expo + React Native.
+Browse all 114 surahs grouped by Juz, play full recitations from a choice of
+reciters, follow along with Arabic text and translation, save favorites, and
+resume where you left off.
+
+Design source: Figma Make — *Tilawah Quran App UI Design*.
+
+## Stack
+
+- **Expo SDK 57** (React Native 0.86, React 19, New Architecture)
+- **Expo Router** — file-based routes in `src/app/`
+- **expo-audio** — streaming playback, background audio, lock-screen controls
+- **Zustand + AsyncStorage** — saved surahs and player state persistence
+- **@gorhom/bottom-sheet** — reciter picker
+- **Al Quran Cloud API** (`api.alquran.cloud`) — ayah text + translation
+- **Islamic Network CDN** (`cdn.islamic.network`) — reciter audio streams
+
+Both data sources are free, public, and require no API key.
+
+## Getting started
+
+```bash
+npm install
+npx expo start
+```
+
+Scan the QR code with **Expo Go** on your phone (iOS or Android), or press
+`i` / `a` if you have a simulator/emulator set up locally.
+
+> This project uses native modules (`expo-audio`, `react-native-reanimated`,
+> `@gorhom/bottom-sheet`, etc.) that aren't in the default Expo Go binary. If
+> Expo Go reports missing native modules, build a development client instead:
+> `npx expo run:ios` / `npx expo run:android`, or `eas build --profile development`.
+
+A rough layout check is also possible in a browser via `npx expo start --web`,
+though the app is designed for mobile and isn't tuned for web.
+
+## Scripts
+
+| Command | Purpose |
+|---|---|
+| `npm run start` | Start the Metro dev server |
+| `npm run ios` / `npm run android` / `npm run web` | Start and open on a platform |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | `expo lint` |
+
+Run `typecheck` and `lint` before considering any change done.
+
+## Project layout
+
+```
+src/
+  app/            Expo Router screens (index = Home, player = Now Playing)
+  components/     UI split by feature: home/, player/, reciter/, ui/
+  data/           Surah list, reciter list, shared types
+  lib/            Quran text API, audio URL builder, playback context
+  store/          Zustand stores (player, saved-surah library)
+  theme/          Design tokens (colors, fonts) and font loader
+```
+
+See `PLAN.md` for the phase-by-phase build log, known simplifications versus
+the original Figma design, and what's still open.
+
+## Building for release
+
+This repo ships with an `eas.json` (development/preview/production profiles)
+but has **not** been linked to an EAS project yet. To build and submit:
+
+```bash
+npx eas-cli@latest login       # your Expo account
+npx eas-cli@latest init        # links this repo to an EAS project
+npx eas-cli@latest build --platform ios --profile production
+npx eas-cli@latest build --platform android --profile production
+```
+
+App Store / Play Store submission additionally requires your own Apple
+Developer and Google Play Console credentials — configure those with
+`eas submit` when you're ready.
