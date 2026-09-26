@@ -8,7 +8,8 @@
     "scheme": "tilawah",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true,
+      "bundleIdentifier": "com.bbabiker.tilawah",
+      "supportsTablet": false,
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -16,6 +17,7 @@
       }
     },
     "android": {
+      "package": "com.bbabiker.tilawah",
       "adaptiveIcon": {
         "backgroundColor": "#0A0604",
         "foregroundImage": "./assets/android-icon-foreground.png",
