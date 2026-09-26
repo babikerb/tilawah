@@ -20,24 +20,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # expo-modules-jsi (bundled with every Expo SDK 57/58 app) is caught
-      # between two Xcode generations right now — see expo/expo#50067:
-      #   - Xcode 26.3+ (Swift 6.2+): RuntimeScheduler.h fails to compile
-      #     ("cannot be annotated with SWIFT_RETURNS_RETAINED... not a
-      #     SWIFT_SHARED_REFERENCE type"). Confirmed still broken in the
-      #     latest expo-modules-jsi (58.0.4) too — no patched version exists yet.
-      #   - Xcode 16.x: can't resolve expo-modules-jsi's Package.swift at all
-      #     ("Could not resolve package dependencies"), since it declares
-      #     `swift-tools-version: 6.2`, which only 26.x toolchains understand.
-      # 26.1 is the newest release before the stricter Swift 6.2.3+/26.2+
-      # diagnostic was reportedly introduced, so it's the one version that
-      # might satisfy both constraints — unconfirmed, revisit if this still
-      # fails. EAS's own hosted cloud builders sidestep this entirely (older
-      # Swift), which is the fallback if no local Xcode version works.
-      - name: Select Xcode 26.1
+      # expo-modules-jsi's Package.swift declares `swift-tools-version: 6.2`,
+      # so it needs Xcode 26.x to even resolve its manifest — Xcode 16.x fails
+      # with "Could not resolve package dependencies". latest-stable is safe
+      # again now that patches/expo-modules-jsi+57.1.1.patch (applied via the
+      # postinstall hook) fixes the separate SWIFT_RETURNS_RETAINED compile
+      # error that newer Swift 6.2 compilers hit on the unpatched header
+      # (see expo/expo#50067 — still open/unfixed upstream as of SDK 58).
+      - name: Select Xcode (latest stable)
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: "26.1"
+          xcode-version: latest-stable
 
       - name: Print Xcode version
         run: xcodebuild -version
