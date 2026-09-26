@@ -44,27 +44,6 @@ Network CDN for full-surah reciter audio.
       bundling. The user chose to skip visual verification for now rather
       than retry.
 
-## CI / native build notes
-
-- `patches/expo-modules-jsi+57.1.1.patch` (applied automatically via the
-  `postinstall` script) fixes a real, still-open upstream Expo bug
-  ([expo/expo#50067](https://github.com/expo/expo/issues/50067)):
-  `RuntimeScheduler.h` applies `SWIFT_SHARED_REFERENCE` *after* the class
-  body closes, so Swift 6.2+ compilers (Xcode 26.3+) reject the
-  `SWIFT_RETURNS_RETAINED` constructors declared earlier in the same class
-  as "not a SWIFT_SHARED_REFERENCE type." The patch just moves the
-  attribute to the canonical pre-body position Apple's own C++ interop
-  docs show — no runtime behavior change, confirmed byte-identical output
-  when reversed. Still unfixed in expo-modules-jsi 58.0.4 as of this
-  writing; drop the patch once upstream ships a real fix.
-- `.github/workflows/ios-build.yml` pins nothing Xcode-version-wise beyond
-  `latest-stable` — that's only safe *with* the patch above, since
-  expo-modules-jsi's `Package.swift` separately requires Xcode 26.x just to
-  resolve its manifest (Xcode 16.x fails with "Could not resolve package
-  dependencies"). Xcode 26.1 was tried as a middle ground before the patch
-  existed; it still hit the same compile error, so there's no working
-  Xcode version without the patch.
-
 ## Known simplifications vs. the Figma prototype
 
 - Ayah pagination dots only render for surahs with ≤12 ayahs (the prototype
