@@ -20,7 +20,7 @@
     "android": {
       "package": "com.bbabiker.tilawah",
       "adaptiveIcon": {
-        "backgroundColor": "#0A0604",
+        "backgroundColor": "#EDE0B5",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -34,7 +34,15 @@
       "expo-router",
       "expo-status-bar",
       "expo-font",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0604",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain"
+        }
+      ],
       [
         "expo-audio",
         {

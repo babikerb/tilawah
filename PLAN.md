@@ -29,10 +29,12 @@ Network CDN for full-surah reciter audio.
 - [x] **Phase 5 — Persistence & polish.** Saved-surahs + last-played state
       persist via AsyncStorage; loading/error states on the ayah fetch;
       accessibility labels on all interactive controls; haptic feedback on
-      the stamp buttons. Still open: app icon/splash art in the vintage
-      theme (currently default Expo assets — needs actual artwork, not
-      something to fabricate without the user's input); marquee ticker and
-      true paper-grain texture remain simplified (see below).
+      the stamp buttons. App icon, Android adaptive icon (+ monochrome
+      themed-icon variant), and splash screen ported from the cassette
+      artwork the user added to the Figma Make file — rasterized from its
+      SVG source rather than cropping a mockup screenshot, so it matches
+      pixel-for-pixel. Marquee ticker and true paper-grain texture remain
+      simplified (see below).
 - [x] **Phase 6 — QA & shippability.** `tsc --noEmit` and `expo lint` both
       clean; `expo-doctor` clean (21/21); `eas.json` build profiles
       (development/preview/production); README with run + build instructions.
