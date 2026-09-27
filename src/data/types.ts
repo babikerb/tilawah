@@ -22,4 +22,5 @@ export interface Ayah {
   numberInSurah: number;
   arabic: string;
   translation: string;
+  audioUrl: string;
 }

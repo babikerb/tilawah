@@ -9,8 +9,8 @@ current design system and what's done vs. still pending.
 
 Stack: Expo SDK 57 + TypeScript, Expo Router (routes in `src/app/`), Zustand
 (+ AsyncStorage persistence), `expo-audio` for playback, `@gorhom/bottom-sheet`
-for the reciter picker, Al Quran Cloud API for ayah text/translation, Islamic
-Network CDN for full-surah reciter audio.
+for the reciter picker, Al Quran Cloud API for ayah text/translation/per-ayah
+audio URLs, Islamic Network CDN for the actual audio files.
 
 ## Phases
 
@@ -91,6 +91,47 @@ work rather than bundling into the visual restyle:
   vintage-cassette artwork from before this redesign — they no longer
   match the new green/cream look. Needs new artwork from the user (same
   policy as before: not fabricating branding without their input).
+
+## Audio architecture: per-ayah playback (replaced full-surah streaming)
+
+Originally played one continuous full-surah MP3 per reciter. Rebuilt as
+sequential per-ayah clips instead, driven by explicit user request for the
+displayed ayah to auto-sync with what's playing:
+
+- `quranApi.ts`'s `fetchSurahAyahs(surahId, reciterEdition)` now fetches
+  three editions in one call (`quran-uthmani,en.sahih,{reciterEdition}`)
+  and each `Ayah` carries its own `audioUrl`.
+- `PlaybackProvider` owns `ayahs`/`ayahIndex` now (moved out of
+  `player.tsx`, which previously tracked them locally and independently
+  of what was actually playing) — it loads each ayah's clip in sequence,
+  auto-advances on `didJustFinish`, and loops to ayah 1 or stops at the
+  end of the surah depending on `repeat`. Prev/Next buttons now actually
+  change what's playing, not just what's displayed.
+- Whole-surah preload: as soon as a surah's ayah list loads, every ayah's
+  audio is preloaded sequentially via `expo-audio`'s `preload()` (confirmed
+  against the installed package's actual type definitions, not just docs)
+  so advancing between ayahs has no network gap. Cleared via
+  `clearAllPreloadedSources()` when switching surah/reciter.
+- Bismillah: no special-casing needed. The data source already prepends it
+  to ayah 1's text+audio for every surah except At-Tawbah (confirmed via
+  direct API inspection), and for Al-Fatihah ayah 1 *is* the Bismillah
+  itself (a standalone ayah, per the standard count of Fatihah as 7 ayahs).
+- Reciter requirement going forward: **must have per-ayah audio**
+  (`/v1/ayah/{n}/{edition}` returning a real `audio` field), not just
+  full-surah files — many editions are "recited surah by surah" only and
+  return a 404 telling you so. Verified working: `ar.alafasy`,
+  `ar.abdulbasitmurattal`, `ar.husary`, `ar.abdurrahmaansudais`,
+  `ar.minshawi`. Two swaps happened for this reason: Maher Al-Muaiqly
+  (`ar.mahermuaiqly`) had no full-surah files at all under the old
+  architecture; Saud Al-Shuraim (`ar.saudalshuraim`), his replacement, was
+  then found to have no *per-ayah* files once the architecture changed —
+  replaced again with Al-Husary.
+- Not done: true word-level highlighting. Needs a specialized timing
+  dataset (Al Quran Cloud has none); a research project called
+  `quran-align` publishes word/ayah timestamps for a handful of reciters
+  synced to everyayah.com audio, not our current CDN — flagged as a
+  distinct follow-up to research, not guaranteed to pan out with our
+  reciters/audio source.
 
 ## Known simplifications vs. the Figma prototype (pre-redesign, may be stale)
 

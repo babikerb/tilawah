@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -13,10 +13,8 @@ import { ReciterSheet } from '../components/reciter/ReciterSheet';
 import { BackIcon, ChevronDownIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from '../components/ui/icons';
 import { colors, fonts } from '../theme/tokens';
 import { getSurah, juzLabel } from '../data/surahs';
-import { fetchSurahAyahs } from '../lib/quranApi';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { usePlayback } from '../lib/PlaybackProvider';
-import type { Ayah } from '../data/types';
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -37,12 +35,8 @@ export default function PlayerScreen() {
   const toggleRepeat = usePlayerStore((s) => s.toggleRepeat);
   const setReciter = usePlayerStore((s) => s.setReciter);
 
-  const { currentTime, duration, progress, seekToFraction } = usePlayback();
-
-  const [ayahs, setAyahs] = useState<Ayah[]>([]);
-  const [ayahIndex, setAyahIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { ayahs, ayahIndex, setAyahIndex, loading, error, currentTime, duration, progress, seekToFraction } =
+    usePlayback();
 
   const surah = currentSurahId ? getSurah(currentSurahId) : undefined;
 
@@ -50,30 +44,6 @@ export default function PlayerScreen() {
     if (!currentSurahId) {
       router.back();
     }
-  }, [currentSurahId]);
-
-  useEffect(() => {
-    if (!currentSurahId) return;
-    let cancelled = false;
-    // Resetting fetch state for the newly-selected surah before the request
-    // resolves is intentional here, not a synchronization bug.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
-    setError(null);
-    setAyahIndex(0);
-    fetchSurahAyahs(currentSurahId)
-      .then((data) => {
-        if (!cancelled) setAyahs(data);
-      })
-      .catch(() => {
-        if (!cancelled) setError('Could not load ayah text. Check your connection.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
   }, [currentSurahId]);
 
   if (!surah) {
@@ -126,7 +96,7 @@ export default function PlayerScreen() {
 
         <View style={styles.transport}>
           <FlatIconButton
-            onPress={() => setAyahIndex((i) => Math.max(0, i - 1))}
+            onPress={() => setAyahIndex(Math.max(0, ayahIndex - 1))}
             size={40}
             accessibilityLabel="Previous ayah"
           >
@@ -141,7 +111,7 @@ export default function PlayerScreen() {
             {isPlaying ? <PauseIcon size={18} color={colors.white} /> : <PlayIcon size={18} color={colors.white} />}
           </FlatIconButton>
           <FlatIconButton
-            onPress={() => setAyahIndex((i) => Math.min(ayahs.length - 1, i + 1))}
+            onPress={() => setAyahIndex(Math.min(ayahs.length - 1, ayahIndex + 1))}
             size={40}
             accessibilityLabel="Next ayah"
           >

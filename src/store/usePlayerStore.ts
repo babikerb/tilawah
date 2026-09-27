@@ -12,6 +12,7 @@ interface PlayerState {
   reciter: () => Reciter;
   play: (surahId: number) => void;
   togglePlay: () => void;
+  setPlaying: (isPlaying: boolean) => void;
   setReciter: (reciterId: string) => void;
   toggleRepeat: () => void;
 }
@@ -26,6 +27,7 @@ export const usePlayerStore = create<PlayerState>()(
       reciter: () => RECITERS.find((r) => r.id === get().reciterId) ?? DEFAULT_RECITER,
       play: (surahId) => set({ currentSurahId: surahId, isPlaying: true }),
       togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
+      setPlaying: (isPlaying) => set({ isPlaying }),
       setReciter: (reciterId) => set({ reciterId }),
       toggleRepeat: () => set((state) => ({ repeat: !state.repeat })),
     }),

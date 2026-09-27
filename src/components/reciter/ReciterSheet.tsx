@@ -13,7 +13,7 @@ interface ReciterSheetProps {
 
 export const ReciterSheet = forwardRef<BottomSheetModal, ReciterSheetProps>(
   ({ selectedId, onSelect }, ref) => {
-    const snapPoints = useMemo(() => ['45%'], []);
+    const snapPoints = useMemo(() => ['60%'], []);
 
     return (
       <BottomSheetModal
