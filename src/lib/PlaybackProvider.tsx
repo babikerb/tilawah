@@ -29,11 +29,15 @@ const BISMILLAH_WORD_COUNT = 4;
  * after a short, backing-off delay rides it out instead of dropping the call
  * (or, before these call sites were guarded, crashing the app).
  */
-function callNativeWithRetry(fn: () => void, label: string, maxAttempts = 4): Promise<boolean> {
+function callNativeWithRetry(fn: () => void | Promise<void>, label: string, maxAttempts = 4): Promise<boolean> {
   return new Promise((resolve) => {
-    const attempt = (n: number) => {
+    const attempt = async (n: number) => {
       try {
-        fn();
+        // Awaiting works uniformly whether fn() is sync (e.g. play()) or
+        // returns a Promise (e.g. seekTo()) — for the latter, this also
+        // makes sure we don't resolve (and let a caller proceed to, say,
+        // play()) until the seek has actually landed, not just been issued.
+        await fn();
         resolve(true);
       } catch (err) {
         if (n >= maxAttempts) {
@@ -362,32 +366,40 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           'setActiveForLockScreen'
         );
       }
-      if (isPlaying) callNativeWithRetry(() => player.play(), 'play');
+
       if (skipOffsetSec > 0) {
-        // `replace()` kicks off an async native load and returns immediately
-        // — calling `seekTo()` right after it races that load and can
-        // silently no-op, leaving playback (and the word highlighting
-        // driven off currentTime) stuck at the start of ayah 1's own file
-        // instead of past its embedded Bismillah. `player.isLoaded` is a
-        // live native property (unlike the hook's `status`, which only
-        // refreshes every `updateInterval`), so poll it directly and seek
-        // the instant it's true.
-        const waitAndSeek = () => {
-          if (cancelled) return;
-          let loaded = false;
-          try {
-            loaded = player.isLoaded;
-          } catch {
-            // Same transient media-server condition — just try again shortly.
-          }
-          if (loaded) {
-            callNativeWithRetry(() => player.seekTo(skipOffsetSec), 'seekTo (Bismillah skip)');
-          } else {
-            setTimeout(waitAndSeek, 20);
-          }
-        };
-        waitAndSeek();
+        // Seek past the embedded Bismillah *before* starting playback, not
+        // after — starting playback first (from position 0) let a moment of
+        // the embedded Bismillah actually play un-highlighted (those word
+        // indices aren't displayed anymore) before jumping forward, which
+        // looked like highlighting getting stuck on the trimmed words and
+        // then skipping past the ayah's real first word instead of landing
+        // on it. `replace()` kicks off an async native load and returns
+        // immediately, so wait for `player.isLoaded` (a live native
+        // property, unlike the hook's `status`, which only refreshes every
+        // `updateInterval`) before seeking at all.
+        await new Promise<void>((resolve) => {
+          const waitForLoaded = () => {
+            if (cancelled) {
+              resolve();
+              return;
+            }
+            let loaded = false;
+            try {
+              loaded = player.isLoaded;
+            } catch {
+              // Transient media-server condition — just check again shortly.
+            }
+            if (loaded) resolve();
+            else setTimeout(waitForLoaded, 20);
+          };
+          waitForLoaded();
+        });
+        if (cancelled) return;
+        await callNativeWithRetry(() => player.seekTo(skipOffsetSec), 'seekTo (Bismillah skip)');
+        if (cancelled) return;
       }
+      if (isPlaying) callNativeWithRetry(() => player.play(), 'play');
     })();
 
     // Loading ayah 1's own file while not in Bismillah phase means we've
