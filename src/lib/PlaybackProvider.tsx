@@ -17,8 +17,9 @@ const BISMILLAH_WORD_COUNT = 4;
 
 interface BismillahBoundary {
   /** Millisecond position, within ayah 1's own audio file, where the
-   * embedded Bismillah ends and the surah's real first words begin. */
-  endMs: number;
+   * surah's real first word begins (the embedded Bismillah is everything
+   * before this). */
+  startMs: number;
 }
 
 interface BismillahClip {
@@ -91,8 +92,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       ([start, end]) => start < BISMILLAH_WORD_COUNT && end > BISMILLAH_WORD_COUNT
     );
     if (spansAcrossBoundary) return null;
-    const boundarySegment = segments.find(([, end]) => end === BISMILLAH_WORD_COUNT);
-    return boundarySegment ? { endMs: boundarySegment[3] } : null;
+    // Anchor on the first *real* word's own start time, not the Bismillah's
+    // last word's end time — if that end timestamp ran long in the
+    // alignment data (overlapping the next word), seeking there would cut
+    // into the ayah's real content. The next segment's own start is a
+    // second, independent marker from the same data that can't be thrown
+    // off by the previous word's timing being off.
+    const firstRealWordSegment = segments.find(([start]) => start === BISMILLAH_WORD_COUNT);
+    return firstRealWordSegment ? { startMs: firstRealWordSegment[2] } : null;
   }, [currentSurahId, wordTimingBySurah]);
 
   // Only ayah 1 itself embeds the Bismillah — every other ayah's own first
@@ -103,6 +110,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // file) whenever we're freshly at ayah 1 of an eligible surah and haven't
   // already gotten through it this visit.
   const bismillahPhase = ayahIndex === 0 && !bismillahBypassed && !!bismillahBoundary && !!bismillahClip;
+  // Once bypassed, ayah 1's own file needs to start past its embedded
+  // Bismillah (already heard via the separate clip) instead of replaying it.
+  const skipOffsetSec =
+    ayahIndex === 0 && bismillahBypassed && bismillahBoundary ? bismillahBoundary.startMs / 1000 : 0;
 
   const uri = (bismillahPhase ? bismillahClip?.audioUrl : ayahs[ayahIndex]?.audioUrl) || null;
   // Passing a changing `{ uri }` object here (instead of a stable initial
@@ -282,13 +293,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   // Load the current audio source (the Bismillah clip, or an ayah) whenever
   // it changes, and carry playback intent (keep playing if we were already
-  // playing). Ayah 1 always plays its own file in full afterward — its own
-  // embedded Bismillah plays again rather than being seeked past, since a
-  // seek there previously risked cutting into the ayah's real content on
-  // surahs where the alignment data's boundary estimate ran long.
+  // playing). Ayah 1 played after the Bismillah clip has already run seeks
+  // straight past its own embedded copy of it.
   useEffect(() => {
     if (!uri || loadedUriRef.current === uri) return;
     loadedUriRef.current = uri;
+    let cancelled = false;
     try {
       player.replace({ uri });
       const surah = currentSurahId ? getSurah(currentSurahId) : undefined;
@@ -301,6 +311,29 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         });
       }
       if (isPlaying) player.play();
+      if (skipOffsetSec > 0) {
+        // `replace()` kicks off an async native load and returns immediately
+        // — calling `seekTo()` right after it races that load and can
+        // silently no-op, leaving playback (and the word highlighting
+        // driven off currentTime) stuck at the start of ayah 1's own file
+        // instead of past its embedded Bismillah. `player.isLoaded` is a
+        // live native property (unlike the hook's `status`, which only
+        // refreshes every `updateInterval`), so poll it directly and seek
+        // the instant it's true.
+        const waitAndSeek = () => {
+          if (cancelled) return;
+          try {
+            if (player.isLoaded) {
+              player.seekTo(skipOffsetSec);
+            } else {
+              setTimeout(waitAndSeek, 20);
+            }
+          } catch (err) {
+            console.error('[PlaybackProvider] Seek past Bismillah failed', { uri }, err);
+          }
+        };
+        waitAndSeek();
+      }
     } catch (err) {
       // A native player call threw synchronously — without this catch it
       // takes the whole app down (seen as "exception in hostfunction
@@ -318,6 +351,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // committed to this path for the current visit — lock out a late
     // Bismillah-data arrival from yanking playback back to the clip.
     if (!bismillahPhase && ayahIndex === 0) setBismillahBypassed(true);
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uri]);
 
@@ -329,11 +365,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [isPlaying, uri]);
 
   // When a clip finishes: the Bismillah clip hands off to ayah 1 proper
-  // (which plays its own file in full, embedded Bismillah and all).
+  // (which will seek past its own embedded Bismillah, per skipOffsetSec).
   // Otherwise: "ayah" repeat replays the same ayah forever (doesn't
-  // advance — for memorization/drilling one verse); "surah" repeat advances
-  // normally and loops back to ayah 1 (Bismillah and all) at the end; "off"
-  // advances normally and stops at the end.
+  // advance — for memorization/drilling one verse), from skipOffsetSec
+  // rather than 0 so it doesn't replay the embedded Bismillah either;
+  // "surah" repeat advances normally and loops back to ayah 1 (Bismillah
+  // and all) at the end; "off" advances normally and stops at the end.
   useEffect(() => {
     if (!status.didJustFinish) return;
     // Reacting to the audio player (an external system) finishing a clip,
@@ -342,7 +379,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     if (bismillahPhase) {
       setBismillahBypassed(true);
     } else if (repeatMode === 'ayah') {
-      player.seekTo(0);
+      player.seekTo(skipOffsetSec);
       player.play();
     } else if (ayahIndex < ayahs.length - 1) {
       setAyahIndex(ayahIndex + 1);
@@ -381,20 +418,20 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [ayahs, ayahIndex, wordTimingBySurah, status.currentTime, uri, bismillahPhase, bismillahClip]);
 
   const value = useMemo<PlaybackContextValue>(() => {
-    const duration = status.duration;
-    const currentTime = status.currentTime;
+    const displayDuration = Math.max(0, status.duration - skipOffsetSec);
+    const displayCurrentTime = Math.max(0, status.currentTime - skipOffsetSec);
     return {
       ayahs,
       ayahIndex,
       setAyahIndex,
       loading,
       error,
-      currentTime,
-      duration,
+      currentTime: displayCurrentTime,
+      duration: displayDuration,
       isBuffering: status.isBuffering,
-      progress: duration > 0 ? currentTime / duration : 0,
+      progress: displayDuration > 0 ? displayCurrentTime / displayDuration : 0,
       seekToFraction: (fraction) => {
-        if (duration > 0) player.seekTo(fraction * duration);
+        if (displayDuration > 0) player.seekTo(skipOffsetSec + fraction * displayDuration);
       },
       activeWordRange,
       bismillahWordCount,
@@ -410,6 +447,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     player,
     activeWordRange,
     bismillahWordCount,
+    skipOffsetSec,
   ]);
 
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
