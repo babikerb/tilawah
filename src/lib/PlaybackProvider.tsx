@@ -272,41 +272,58 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!uri || loadedUriRef.current === uri) return;
     loadedUriRef.current = uri;
-    player.replace({ uri });
-    const surah = currentSurahId ? getSurah(currentSurahId) : undefined;
-    const ayah = ayahs[ayahIndex];
-    if (surah && ayah) {
-      player.setActiveForLockScreen(true, {
-        title: bismillahPhase ? `${surah.english} · Bismillah` : `${surah.english} · Ayah ${ayah.numberInSurah}`,
-        artist: reciter.name,
-        albumTitle: 'Tilawah',
-      });
-    }
-    if (isPlaying) player.play();
-
     let cancelled = false;
-    if (skipOffsetSec > 0) {
-      // `replace()` kicks off an async native load and returns immediately —
-      // calling `seekTo()` right after it races that load and can silently
-      // no-op, leaving playback (and the word highlighting driven off
-      // currentTime) stuck at the start of ayah 1's own file instead of past
-      // its embedded Bismillah. `player.isLoaded` is a live native property
-      // (unlike the hook's `status`, which only refreshes every
-      // `updateInterval`), so poll it directly and seek the instant it's true.
-      const waitAndSeek = () => {
-        if (cancelled) return;
-        if (player.isLoaded) {
-          player.seekTo(skipOffsetSec);
-        } else {
-          setTimeout(waitAndSeek, 20);
-        }
-      };
-      waitAndSeek();
+    try {
+      player.replace({ uri });
+      const surah = currentSurahId ? getSurah(currentSurahId) : undefined;
+      const ayah = ayahs[ayahIndex];
+      if (surah && ayah) {
+        player.setActiveForLockScreen(true, {
+          title: bismillahPhase ? `${surah.english} · Bismillah` : `${surah.english} · Ayah ${ayah.numberInSurah}`,
+          artist: reciter.name,
+          albumTitle: 'Tilawah',
+        });
+      }
+      if (isPlaying) player.play();
+      if (skipOffsetSec > 0) {
+        // `replace()` kicks off an async native load and returns immediately
+        // — calling `seekTo()` right after it races that load and can
+        // silently no-op, leaving playback (and the word highlighting
+        // driven off currentTime) stuck at the start of ayah 1's own file
+        // instead of past its embedded Bismillah. `player.isLoaded` is a
+        // live native property (unlike the hook's `status`, which only
+        // refreshes every `updateInterval`), so poll it directly and seek
+        // the instant it's true.
+        const waitAndSeek = () => {
+          if (cancelled) return;
+          try {
+            if (player.isLoaded) {
+              player.seekTo(skipOffsetSec);
+            } else {
+              setTimeout(waitAndSeek, 20);
+            }
+          } catch (err) {
+            console.error('[PlaybackProvider] Seek past Bismillah failed', { uri }, err);
+          }
+        };
+        waitAndSeek();
+      }
+    } catch (err) {
+      // A native player call threw synchronously — without this catch it
+      // takes the whole app down (seen as "exception in hostfunction
+      // player.replace(...)"). Reset loadedUriRef so a later change (retry,
+      // reciter switch, next ayah) gets a fresh attempt instead of being
+      // permanently stuck thinking this uri already "loaded".
+      console.error('[PlaybackProvider] Failed to load audio source', { uri, bismillahPhase }, err);
+      loadedUriRef.current = null;
+      // Reacting to a native module throwing (an external system failing),
+      // not synchronizing React state with itself.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError('Could not play this audio. Try again or switch reciters.');
     }
     // Loading ayah 1's own file while not in Bismillah phase means we've
     // committed to this path for the current visit — lock out a late
     // Bismillah-data arrival from yanking playback back to the clip.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!bismillahPhase && ayahIndex === 0) setBismillahBypassed(true);
     return () => {
       cancelled = true;
