@@ -341,12 +341,23 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     prevAyahIndexForBismillahRef.current = ayahIndex;
   }, [ayahIndex, currentSurahId]);
 
-  // Give the Bismillah clip a few seconds to load before giving up and
-  // playing ayah 1 directly — genuinely unavailable (fetch failed, or this
-  // reciter's Al-Fatihah is missing audio) shouldn't mean silence forever.
+  // Give the Bismillah clip time to load before giving up and playing ayah
+  // 1 directly — genuinely unavailable (fetch failed, or this reciter's
+  // Al-Fatihah is missing audio) shouldn't mean silence forever. Generous
+  // on purpose: the moment a surah's ayahs arrive, the preload effect below
+  // starts a real sequential download of every one of its audio files —
+  // for a long surah (e.g. Al-Mu'minun's 118 ayahs, An-Nur's 64) that's
+  // meaningful concurrent network activity racing the Bismillah clip's own
+  // small fetch for the same bandwidth on a real device, not just the fast,
+  // uncontended network this was originally tuned against.
   useEffect(() => {
     if (!waitingForBismillahClip) return;
-    const timer = setTimeout(() => setBismillahBypassed(true), 4000);
+    const timer = setTimeout(() => {
+      console.warn(
+        '[PlaybackProvider] Gave up waiting for the Bismillah clip to load in time; playing ayah 1 without it.'
+      );
+      setBismillahBypassed(true);
+    }, 8000);
     return () => clearTimeout(timer);
   }, [waitingForBismillahClip]);
 
@@ -372,6 +383,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     clearAllPreloadedSources().catch(() => {});
     const activeIndex = ayahIndex;
     (async () => {
+      // A short head start before hammering the network with this surah's
+      // own audio downloads — otherwise this sequential preload sweep,
+      // starting the instant ayahs arrive, directly competes for bandwidth
+      // with the small Bismillah-clip fetch that's very possibly racing it
+      // at that exact moment (see the grace-period effect above). Imperceptible
+      // here; playback itself doesn't reach any preloaded ayah for several
+      // seconds regardless, while the Bismillah clip plays first.
+      if (activeIndex === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        if (cancelled) return;
+      }
       if (bismillahClip?.audioUrl && activeIndex !== 0) {
         await preload({ uri: bismillahClip.audioUrl }).catch(() => {});
       }
