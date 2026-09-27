@@ -95,7 +95,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     return boundarySegment ? { endMs: boundarySegment[3] } : null;
   }, [currentSurahId, wordTimingBySurah]);
 
-  const bismillahWordCount = bismillahBoundary ? BISMILLAH_WORD_COUNT : 0;
+  // Only ayah 1 itself embeds the Bismillah — every other ayah's own first
+  // few words are just its own text, not a Bismillah to split out.
+  const bismillahWordCount = ayahIndex === 0 && bismillahBoundary ? BISMILLAH_WORD_COUNT : 0;
 
   // Play the Bismillah as its own clip (not the copy embedded in ayah 1's
   // file) whenever we're freshly at ayah 1 of an eligible surah and haven't
@@ -271,12 +273,34 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       });
     }
     if (isPlaying) player.play();
-    if (skipOffsetSec > 0) player.seekTo(skipOffsetSec);
+
+    let cancelled = false;
+    if (skipOffsetSec > 0) {
+      // `replace()` kicks off an async native load and returns immediately —
+      // calling `seekTo()` right after it races that load and can silently
+      // no-op, leaving playback (and the word highlighting driven off
+      // currentTime) stuck at the start of ayah 1's own file instead of past
+      // its embedded Bismillah. `player.isLoaded` is a live native property
+      // (unlike the hook's `status`, which only refreshes every
+      // `updateInterval`), so poll it directly and seek the instant it's true.
+      const waitAndSeek = () => {
+        if (cancelled) return;
+        if (player.isLoaded) {
+          player.seekTo(skipOffsetSec);
+        } else {
+          setTimeout(waitAndSeek, 20);
+        }
+      };
+      waitAndSeek();
+    }
     // Loading ayah 1's own file while not in Bismillah phase means we've
     // committed to this path for the current visit — lock out a late
     // Bismillah-data arrival from yanking playback back to the clip.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!bismillahPhase && ayahIndex === 0) setBismillahBypassed(true);
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uri]);
 
