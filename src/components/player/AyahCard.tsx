@@ -19,15 +19,13 @@ export function AyahCard({ loading, error, ayahs, index, onSelectIndex, juzText,
   return (
     <View style={styles.card}>
       <View style={styles.metaStrip}>
-        <Text style={styles.metaText}>{juzText.toUpperCase()}</Text>
-        <Text style={styles.metaText}>
-          {ayah ? `AYAH ${ayah.numberInSurah} OF ${totalAyahs}` : ''}
-        </Text>
+        <Text style={styles.metaText}>{juzText}</Text>
+        <Text style={styles.metaText}>{ayah ? `Ayah ${ayah.numberInSurah} of ${totalAyahs}` : ''}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
         {loading ? (
-          <ActivityIndicator color={colors.ink} />
+          <ActivityIndicator color={colors.green} />
         ) : error ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : ayah ? (
@@ -56,59 +54,52 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: 'rgba(248,238,214,0.78)',
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 10,
-    overflow: 'hidden',
   },
   metaStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(26,17,8,0.09)',
-    backgroundColor: 'rgba(26,17,8,0.03)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.creamAlt,
   },
   metaText: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.uiMedium,
     fontSize: 10,
-    color: 'rgba(26,17,8,0.40)',
-    letterSpacing: 1.2,
+    color: colors.inkMuted,
   },
   body: {
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 22,
-    paddingVertical: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
   },
   arabic: {
     fontFamily: fonts.quran,
-    fontSize: 30,
+    fontSize: 26,
     color: colors.ink,
     textAlign: 'center',
-    lineHeight: 66,
+    lineHeight: 58,
     writingDirection: 'rtl',
   },
   divider: {
-    width: '38%',
+    width: '32%',
     height: 1,
-    backgroundColor: 'rgba(26,17,8,0.10)',
-    marginVertical: 16,
+    backgroundColor: colors.border,
+    marginVertical: 14,
   },
   translation: {
-    fontFamily: fonts.serif,
+    fontFamily: fonts.ui,
     fontSize: 13,
-    color: colors.inkMid,
+    color: colors.inkMuted,
     textAlign: 'center',
-    lineHeight: 23,
-    fontStyle: 'italic',
+    lineHeight: 21,
   },
   errorText: {
-    fontFamily: fonts.serif,
+    fontFamily: fonts.ui,
     fontSize: 13,
     color: colors.inkMuted,
     textAlign: 'center',
@@ -120,16 +111,17 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(26,17,8,0.07)',
+    borderTopColor: colors.border,
   },
   dot: {
     height: 6,
     width: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(26,17,8,0.14)',
+    backgroundColor: colors.border,
   },
   dotActive: {
-    width: 22,
-    backgroundColor: colors.ink,
+    width: 18,
+    borderRadius: 3,
+    backgroundColor: colors.green,
   },
 });

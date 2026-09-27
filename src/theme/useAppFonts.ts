@@ -1,16 +1,19 @@
 import { useFonts } from 'expo-font';
-import { AlfaSlabOne_400Regular } from '@expo-google-fonts/alfa-slab-one';
-import { SpecialElite_400Regular } from '@expo-google-fonts/special-elite';
 import { AmiriQuran_400Regular } from '@expo-google-fonts/amiri-quran';
-import { Arvo_400Regular, Arvo_400Regular_Italic, Arvo_700Bold } from '@expo-google-fonts/arvo';
+import { Amiri_400Regular, Amiri_700Bold } from '@expo-google-fonts/amiri';
+import {
+  NotoSans_400Regular,
+  NotoSans_500Medium,
+  NotoSans_700Bold,
+} from '@expo-google-fonts/noto-sans';
 
 export function useAppFonts() {
   return useFonts({
-    AlfaSlabOne_400Regular,
-    SpecialElite_400Regular,
     AmiriQuran_400Regular,
-    Arvo_400Regular,
-    Arvo_400Regular_Italic,
-    Arvo_700Bold,
+    Amiri_400Regular,
+    Amiri_700Bold,
+    NotoSans_400Regular,
+    NotoSans_500Medium,
+    NotoSans_700Bold,
   });
 }

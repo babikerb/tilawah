@@ -1,7 +1,11 @@
 # Tilawah — build plan
 
-Vintage cassette-themed Quran audio app. Source design: Figma Make file
-`Tilawah-Quran-App-UI-Design` (3 screens: Home, Now Playing, Reciter sheet).
+Quran audio app. Originally built from a Figma Make file (vintage cassette
+theme); redesigned per the user's request into an "old-web portal" style
+inspired by mp3quran.net's 2010s-era look — deep Islamic green + cream,
+boxed sections with green title strips, thin borders, dense list rows, no
+gradients or skeuomorphic effects. See "Redesign" section below for the
+current design system and what's done vs. still pending.
 
 Stack: Expo SDK 57 + TypeScript, Expo Router (routes in `src/app/`), Zustand
 (+ AsyncStorage persistence), `expo-audio` for playback, `@gorhom/bottom-sheet`
@@ -44,7 +48,51 @@ Network CDN for full-surah reciter audio.
       bundling. The user chose to skip visual verification for now rather
       than retry.
 
-## Known simplifications vs. the Figma prototype
+## Redesign — "old-web portal" style (in progress)
+
+Design system (`src/theme/tokens.ts`):
+- Colors: `green` #0E5A3F (primary), `greenDark` #0A4530 (bars/headers),
+  `greenLight` #E7F1EC (tints/selected rows), `cream` #FAF7F0 (page bg),
+  `creamAlt` #F1ECDF (striped rows), `border` #D8D3C7, `gold` #B8912A /
+  `goldLight` #EFE2BE (accents only), `ink` #1F2A24, `inkMuted` #5C6862.
+- Fonts: Amiri (UI Arabic labels/names), Amiri Quran (scripture text only,
+  kept from before — it's built for Uthmani script), Noto Sans (UI Latin
+  text, 400/500/700).
+- Radii: 2–4px everywhere (`radii.sm/md/lg` = 2/3/4), no pill shapes.
+- Core components: `SectionBox` (bordered box, green title strip — the
+  building block for every screen), `AppHeader` (green bar with a subtle
+  8-point-star SVG tessellation — an original tiling pattern, not copied
+  from any site), `AppBackground` (flat cream, no texture), `FlatIconButton`
+  (thin border or green fill, no gradients/shadows).
+
+Done: Home, Now Playing, and the Reciter picker sheet fully restyled.
+`CassetteCard`, `Reel`, `VuBars`, `PaperBackground`, `StampButton`, and the
+old `CassetteSpine` (→ renamed/rewritten as `ReciterRow`) were retired as
+part of this — the vintage skeuomorphic effects don't fit a flat,
+dense-list, "no gradients" style. Surah list is now literal table rows
+(number / names / ayah count / icons) with alternating shading; the old
+big cassette "continue listening" card is now a plain boxed row.
+
+Still pending, per explicit user requests — each is a real feature/
+architecture addition, not just styling, so treating as separate follow-up
+work rather than bundling into the visual restyle:
+- **Settings screen** — default reciter, language, theme, persisted.
+- **Offline downloads** — real `expo-file-system` downloads, not just a UI
+  affordance.
+- **Recently played tracking** — new store + a home section; needs a
+  policy (how many entries, keyed by surah+reciter or just surah?).
+- **Arabic/English UI toggle + RTL** — real i18n (translate every UI
+  string) plus `I18nManager` layout mirroring. Note: RTL layout direction
+  changes in React Native require an app restart to take effect after
+  toggling — can't be instant.
+- **Light/dark theme toggle** — needs a theme context (current tokens are
+  static consts, not swappable), plus a dark-green/charcoal palette.
+- **App icon/splash mismatch**: the current icon and splash screen are the
+  vintage-cassette artwork from before this redesign — they no longer
+  match the new green/cream look. Needs new artwork from the user (same
+  policy as before: not fabricating branding without their input).
+
+## Known simplifications vs. the Figma prototype (pre-redesign, may be stale)
 
 - Ayah pagination dots only render for surahs with ≤12 ayahs (the prototype
   only ever had 2–7 sample ayahs; real surahs go up to 286).

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { HeartIcon } from '../ui/icons';
+import { FlatIconButton } from '../ui/FlatIconButton';
+import { HeartIcon, PlayIcon } from '../ui/icons';
 import { colors, fonts } from '../../theme/tokens';
 import type { Surah } from '../../data/types';
 
@@ -9,49 +10,51 @@ interface SurahRowProps {
   saved: boolean;
   onToggleSave: () => void;
   onPlay: () => void;
+  striped: boolean;
 }
 
-export function SurahRow({ surah, saved, onToggleSave, onPlay }: SurahRowProps) {
+export function SurahRow({ surah, saved, onToggleSave, onPlay, striped }: SurahRowProps) {
   return (
     <Pressable
       onPress={onPlay}
       accessibilityRole="button"
       accessibilityLabel={`Play ${surah.english}`}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        striped && styles.rowStriped,
+        pressed && styles.rowPressed,
+      ]}
     >
-      <View style={styles.numberStamp}>
-        <Text style={styles.numberText}>{String(surah.id).padStart(2, '0')}</Text>
+      <Text style={styles.number}>{surah.id}</Text>
+
+      <View style={styles.names}>
+        <Text style={styles.english} numberOfLines={1}>
+          {surah.english}
+          <Text style={styles.meaning}> — {surah.meaning}</Text>
+        </Text>
       </View>
 
-      <View style={styles.textBlock}>
-        <View style={styles.titleRow}>
-          <Text style={styles.english} numberOfLines={1}>
-            {surah.english}
-          </Text>
-          <Text style={styles.arabic} numberOfLines={1}>
-            {surah.arabic}
-          </Text>
-        </View>
-        <View style={styles.subRow}>
-          <Text style={styles.meaning} numberOfLines={1}>
-            {surah.meaning}
-          </Text>
-          <Text style={styles.ayahCount}>{surah.ayahs} ayahs</Text>
-        </View>
-      </View>
+      <Text style={styles.arabic} numberOfLines={1}>
+        {surah.arabic}
+      </Text>
 
-      <Pressable
-        onPress={(e) => {
-          e.stopPropagation();
-          onToggleSave();
-        }}
-        hitSlop={8}
-        style={styles.heartButton}
-        accessibilityRole="button"
-        accessibilityLabel={saved ? 'Remove from saved' : 'Save surah'}
-      >
-        <HeartIcon size={16} filled={saved} />
-      </Pressable>
+      <Text style={styles.ayahs}>{surah.ayahs}</Text>
+
+      <View style={styles.actions}>
+        <FlatIconButton size={30} onPress={onPlay} accessibilityLabel={`Play ${surah.english}`}>
+          <PlayIcon size={11} color={colors.green} />
+        </FlatIconButton>
+        <FlatIconButton
+          size={30}
+          onPress={(e) => {
+            e.stopPropagation();
+            onToggleSave();
+          }}
+          accessibilityLabel={saved ? 'Remove from saved' : 'Save surah'}
+        >
+          <HeartIcon size={13} filled={saved} color={colors.gold} />
+        </FlatIconButton>
+      </View>
     </Pressable>
   );
 }
@@ -60,73 +63,54 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 64,
+    minHeight: 44,
+    paddingHorizontal: 10,
+    gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(26,17,8,0.09)',
+    borderBottomColor: colors.border,
+  },
+  rowStriped: {
+    backgroundColor: colors.creamAlt,
   },
   rowPressed: {
-    backgroundColor: 'rgba(26,17,8,0.05)',
+    backgroundColor: colors.greenLight,
   },
-  numberStamp: {
-    width: 34,
-    height: 32,
-    marginLeft: 16,
-    marginRight: 12,
-    borderRadius: 3,
-    backgroundColor: 'rgba(26,17,8,0.055)',
-    borderWidth: 1,
-    borderColor: 'rgba(26,17,8,0.11)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  number: {
+    width: 26,
+    fontFamily: fonts.uiMedium,
+    fontSize: 12,
+    color: colors.inkMuted,
+    textAlign: 'right',
   },
-  numberText: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    color: '#5A4A32',
-  },
-  textBlock: {
+  names: {
     flex: 1,
     minWidth: 0,
-    paddingRight: 6,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: 8,
   },
   english: {
-    fontFamily: fonts.serifBold,
-    fontSize: 14,
+    fontFamily: fonts.uiMedium,
+    fontSize: 13,
     color: colors.ink,
-    flexShrink: 1,
-  },
-  arabic: {
-    fontFamily: fonts.quran,
-    fontSize: 15,
-    color: colors.inkMid,
-  },
-  subRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginTop: 2,
   },
   meaning: {
-    fontFamily: fonts.serif,
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.inkMuted,
+  },
+  arabic: {
+    fontFamily: fonts.arabic,
+    fontSize: 16,
+    color: colors.ink,
+    marginHorizontal: 4,
+  },
+  ayahs: {
+    width: 30,
+    fontFamily: fonts.ui,
     fontSize: 11,
     color: colors.inkMuted,
-    fontStyle: 'italic',
-    flexShrink: 1,
+    textAlign: 'center',
   },
-  ayahCount: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    color: 'rgba(26,17,8,0.34)',
-  },
-  heartButton: {
-    paddingVertical: 10,
-    paddingLeft: 4,
-    paddingRight: 14,
+  actions: {
+    flexDirection: 'row',
+    gap: 6,
   },
 });

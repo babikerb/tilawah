@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { PaperBackground } from '../components/ui/PaperBackground';
-import { StampButton } from '../components/ui/StampButton';
+import { AppBackground } from '../components/ui/AppBackground';
+import { SectionBox } from '../components/ui/SectionBox';
+import { FlatIconButton } from '../components/ui/FlatIconButton';
 import { AyahCard } from '../components/player/AyahCard';
 import { ProgressScrubber } from '../components/player/ProgressScrubber';
 import { ReciterSheet } from '../components/reciter/ReciterSheet';
@@ -80,11 +80,11 @@ export default function PlayerScreen() {
   }
 
   return (
-    <PaperBackground style={{ paddingTop: insets.top }}>
+    <AppBackground style={{ paddingTop: insets.top }}>
       <View style={styles.header}>
-        <StampButton onPress={() => router.back()} size={42} gradient={[colors.tapeDark, colors.walnut]} accessibilityLabel="Back">
-          <BackIcon />
-        </StampButton>
+        <FlatIconButton onPress={() => router.back()} size={36} accessibilityLabel="Back">
+          <BackIcon size={16} color={colors.ink} />
+        </FlatIconButton>
 
         <View style={styles.titleBlock}>
           <View style={styles.titleRow}>
@@ -96,12 +96,12 @@ export default function PlayerScreen() {
             </Text>
           </View>
           <Text style={styles.meaning} numberOfLines={1}>
-            {surah.meaning}
+            {surah.meaning} · {reciter.name}
           </Text>
         </View>
       </View>
 
-      <View style={styles.cardArea}>
+      <SectionBox title="AYAH" titleArabic="آية" style={styles.cardBox} noBodyPadding>
         <AyahCard
           loading={loading}
           error={error}
@@ -111,9 +111,9 @@ export default function PlayerScreen() {
           juzText={juzLabel(surah.juz)}
           totalAyahs={surah.ayahs}
         />
-      </View>
+      </SectionBox>
 
-      <LinearGradient colors={[colors.tapeDark, colors.walnut]} style={[styles.controls, { paddingBottom: 28 + insets.bottom }]}>
+      <View style={[styles.controls, { paddingBottom: 14 + insets.bottom }]}>
         <View style={styles.progressBlock}>
           <ProgressScrubber progress={progress} onSeek={seekToFraction} />
           <View style={styles.timeRow}>
@@ -123,63 +123,59 @@ export default function PlayerScreen() {
         </View>
 
         <View style={styles.transport}>
-          <StampButton
+          <FlatIconButton
             onPress={() => setAyahIndex((i) => Math.max(0, i - 1))}
-            size={58}
-            gradient={[colors.tapeDark, colors.walnut]}
+            size={40}
             accessibilityLabel="Previous ayah"
           >
-            <PrevIcon />
-          </StampButton>
-          <StampButton
+            <PrevIcon size={16} color={colors.green} />
+          </FlatIconButton>
+          <FlatIconButton
+            variant="filled"
             onPress={togglePlay}
-            size={74}
-            gradient={[colors.mustard, colors.mustardDark]}
+            size={54}
             accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? <PauseIcon size={22} color={colors.ink} /> : <PlayIcon size={22} color={colors.ink} />}
-          </StampButton>
-          <StampButton
+            {isPlaying ? <PauseIcon size={18} color={colors.white} /> : <PlayIcon size={18} color={colors.white} />}
+          </FlatIconButton>
+          <FlatIconButton
             onPress={() => setAyahIndex((i) => Math.min(ayahs.length - 1, i + 1))}
-            size={58}
-            gradient={[colors.tapeDark, colors.walnut]}
+            size={40}
             accessibilityLabel="Next ayah"
           >
-            <NextIcon />
-          </StampButton>
+            <NextIcon size={16} color={colors.green} />
+          </FlatIconButton>
         </View>
 
         <View style={styles.bottomRow}>
           <Pressable onPress={toggleRepeat} style={styles.repeatButton} accessibilityRole="button" accessibilityLabel="Toggle repeat">
-            <View style={styles.toggleTrack}>
-              <View style={[styles.toggleThumb, repeat && styles.toggleThumbActive]} />
+            <View style={[styles.checkbox, repeat && styles.checkboxActive]}>
+              {repeat && <View style={styles.checkboxDot} />}
             </View>
-            <Text style={[styles.repeatLabel, repeat && styles.repeatLabelActive]}>REPEAT</Text>
+            <Text style={styles.repeatLabel}>Repeat</Text>
           </Pressable>
 
-          <View style={styles.reciterBlock}>
-            <Text style={styles.reciterLabel}>RECITER</Text>
-            <Pressable onPress={() => sheetRef.current?.present()} style={styles.reciterButton}>
-              <Text style={styles.reciterName}>{reciter.name}</Text>
-              <ChevronDownIcon />
-            </Pressable>
-          </View>
+          <Pressable onPress={() => sheetRef.current?.present()} style={styles.reciterButton}>
+            <Text style={styles.reciterLabel}>Reciter:</Text>
+            <Text style={styles.reciterName}>{reciter.name}</Text>
+            <ChevronDownIcon size={7} color={colors.inkMuted} />
+          </Pressable>
         </View>
-      </LinearGradient>
+      </View>
 
       <ReciterSheet ref={sheetRef} selectedId={reciterId} onSelect={setReciter} />
-    </PaperBackground>
+    </AppBackground>
   );
 }
 
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 14,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   titleBlock: {
     flex: 1,
@@ -192,53 +188,53 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   english: {
-    fontFamily: fonts.display,
-    fontSize: 22,
+    fontFamily: fonts.uiBold,
+    fontSize: 16,
     color: colors.ink,
     flexShrink: 1,
   },
   arabic: {
-    fontFamily: fonts.quran,
-    fontSize: 20,
-    color: colors.inkMid,
+    fontFamily: fonts.arabic,
+    fontSize: 18,
+    color: colors.ink,
   },
   meaning: {
-    fontFamily: fonts.serif,
+    fontFamily: fonts.ui,
     fontSize: 11,
     color: colors.inkMuted,
-    fontStyle: 'italic',
-    marginTop: 3,
+    marginTop: 2,
   },
-  cardArea: {
+  cardBox: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
+    marginBottom: 0,
   },
   controls: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    borderTopWidth: 3,
-    borderTopColor: colors.ink,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.white,
   },
   progressBlock: {
-    marginBottom: 14,
+    marginBottom: 10,
   },
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 5,
+    marginTop: 4,
   },
   timeText: {
-    fontFamily: fonts.mono,
-    fontSize: 9,
-    color: 'rgba(237,224,181,0.30)',
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.inkMuted,
   },
   transport: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 14,
-    marginBottom: 16,
+    gap: 16,
+    marginBottom: 12,
   },
   bottomRow: {
     flexDirection: 'row',
@@ -248,60 +244,45 @@ const styles = StyleSheet.create({
   repeatButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  toggleTrack: {
-    width: 44,
-    height: 24,
-    borderRadius: 3,
-    backgroundColor: colors.tapeBlack,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.06)',
-    justifyContent: 'center',
-  },
-  toggleThumb: {
+  checkbox: {
     width: 16,
     height: 16,
     borderRadius: 2,
-    backgroundColor: '#4A3018',
-    marginLeft: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  toggleThumbActive: {
-    backgroundColor: colors.mustard,
-    marginLeft: 25,
+  checkboxActive: {
+    borderColor: colors.green,
+  },
+  checkboxDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 1,
+    backgroundColor: colors.green,
   },
   repeatLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1,
-    color: 'rgba(237,224,181,0.36)',
-  },
-  repeatLabelActive: {
-    color: colors.mustard,
-  },
-  reciterBlock: {
-    alignItems: 'flex-end',
-    gap: 5,
-  },
-  reciterLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 9,
-    color: 'rgba(237,224,181,0.38)',
-    letterSpacing: 1.4,
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.ink,
   },
   reciterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#3A2510',
+    gap: 5,
+  },
+  reciterLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.inkMuted,
   },
   reciterName: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    color: colors.cream,
-    letterSpacing: 0.5,
+    fontFamily: fonts.uiMedium,
+    fontSize: 12,
+    color: colors.green,
   },
 });

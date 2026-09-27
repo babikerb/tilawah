@@ -1,7 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { VuBars } from './VuBars';
+import { FlatIconButton } from '../ui/FlatIconButton';
 import { PauseIcon, PlayIcon } from '../ui/icons';
 import { colors, fonts } from '../../theme/tokens';
 import type { Reciter, Surah } from '../../data/types';
@@ -16,86 +15,66 @@ interface MiniPlayerProps {
 
 export function MiniPlayer({ surah, reciter, isPlaying, onTogglePlay, onOpen }: MiniPlayerProps) {
   return (
-    <Pressable onPress={onOpen} disabled={!surah} accessibilityRole="button" accessibilityLabel="Open now playing">
-      <LinearGradient colors={[colors.tapeDark, colors.walnut]} style={styles.bar}>
-        <View style={styles.grille} />
+    <Pressable
+      onPress={onOpen}
+      disabled={!surah}
+      accessibilityRole="button"
+      accessibilityLabel="Open now playing"
+      style={styles.bar}
+    >
+      <View style={styles.info}>
+        {surah ? (
+          <Text style={styles.trackText} numberOfLines={1}>
+            {surah.english} — {reciter.name}
+          </Text>
+        ) : (
+          <Text style={styles.placeholder}>Select a surah to begin</Text>
+        )}
+      </View>
 
-        <View style={styles.info}>
-          {surah ? (
-            <Text style={styles.trackText} numberOfLines={1} ellipsizeMode="tail">
-              {surah.english} · {reciter.name}
-            </Text>
-          ) : (
-            <Text style={styles.placeholder}>SELECT A SURAH TO BEGIN</Text>
-          )}
-        </View>
-
-        {surah && isPlaying && <VuBars active={isPlaying} />}
-
-        <Pressable
-          onPress={(e) => {
-            e.stopPropagation();
-            if (surah) onTogglePlay();
-          }}
-          disabled={!surah}
-          style={styles.playButton}
-          accessibilityRole="button"
-          accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
-        >
-          <LinearGradient
-            colors={surah ? [colors.mustard, colors.mustardDark] : ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.05)']}
-            style={StyleSheet.absoluteFill}
-          />
-          {isPlaying ? (
-            <PauseIcon size={13} color={colors.ink} />
-          ) : (
-            <PlayIcon size={13} color={surah ? colors.ink : 'rgba(237,224,181,0.35)'} />
-          )}
-        </Pressable>
-      </LinearGradient>
+      <FlatIconButton
+        variant="filled"
+        size={34}
+        onPress={(e) => {
+          e.stopPropagation();
+          if (surah) onTogglePlay();
+        }}
+        disabled={!surah}
+        accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+        style={!surah && styles.disabled}
+      >
+        {isPlaying ? <PauseIcon size={12} color={colors.white} /> : <PlayIcon size={12} color={colors.white} />}
+      </FlatIconButton>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   bar: {
-    height: 68,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    gap: 12,
-    borderTopWidth: 3,
-    borderTopColor: colors.ink,
-  },
-  grille: {
-    width: 34,
-    height: 34,
-    borderRadius: 5,
-    backgroundColor: colors.ink,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.04)',
+    paddingHorizontal: 12,
+    gap: 10,
+    backgroundColor: colors.greenDark,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   info: {
     flex: 1,
     minWidth: 0,
   },
   trackText: {
-    fontFamily: fonts.serifBold,
+    fontFamily: fonts.uiMedium,
     fontSize: 13,
-    color: colors.cream,
+    color: colors.white,
   },
   placeholder: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    color: 'rgba(237,224,181,0.30)',
-    letterSpacing: 1,
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.55)',
   },
-  playButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+  disabled: {
+    opacity: 0.4,
   },
 });

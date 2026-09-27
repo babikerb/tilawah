@@ -3,10 +3,9 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo-google-fonts/alfa-slab-one": "^0.4.1",
+    "@expo-google-fonts/amiri": "^0.4.1",
     "@expo-google-fonts/amiri-quran": "^0.4.1",
-    "@expo-google-fonts/arvo": "^0.4.1",
-    "@expo-google-fonts/special-elite": "^0.4.1",
+    "@expo-google-fonts/noto-sans": "^0.4.2",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.25",

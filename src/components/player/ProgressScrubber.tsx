@@ -1,6 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme/tokens';
 
 interface ProgressScrubberProps {
@@ -63,9 +62,7 @@ export function ProgressScrubber({ progress, onSeek }: ProgressScrubberProps) {
     >
       <View style={styles.trackBg} />
       <View style={[styles.trackFill, { width: `${shown * 100}%` }]} />
-      <View style={[styles.thumb, { left: `${shown * 100}%` }]}>
-        <LinearGradient colors={['#E8C870', '#A87025']} style={StyleSheet.absoluteFill} />
-      </View>
+      <View style={[styles.thumb, { left: `${shown * 100}%` }]} />
     </View>
   );
 }
@@ -81,23 +78,25 @@ const styles = StyleSheet.create({
     right: 0,
     height: 3,
     borderRadius: 2,
-    backgroundColor: 'rgba(237,224,181,0.20)',
+    backgroundColor: colors.border,
   },
   trackFill: {
     position: 'absolute',
     left: 0,
     height: 3,
     borderRadius: 2,
-    backgroundColor: colors.mustard,
+    backgroundColor: colors.green,
   },
   thumb: {
     position: 'absolute',
-    width: 16,
-    height: 16,
-    marginLeft: -8,
-    borderRadius: 8,
+    backgroundColor: colors.white,
+    width: 14,
+    height: 14,
+    marginLeft: -7,
+    marginTop: -7,
+    top: '50%',
+    borderRadius: 7,
     borderWidth: 2,
-    borderColor: colors.ink,
-    overflow: 'hidden',
+    borderColor: colors.green,
   },
 });
