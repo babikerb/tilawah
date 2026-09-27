@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { AppBackground } from '../components/ui/AppBackground';
 import { SectionBox } from '../components/ui/SectionBox';
@@ -81,6 +82,7 @@ export default function PlayerScreen() {
 
   return (
     <AppBackground style={{ paddingTop: insets.top }}>
+      <StatusBar style="dark" />
       <View style={styles.header}>
         <FlatIconButton onPress={() => router.back()} size={36} accessibilityLabel="Back">
           <BackIcon size={16} color={colors.ink} />

@@ -19,26 +19,20 @@ export function SurahRow({ surah, saved, onToggleSave, onPlay, striped }: SurahR
       onPress={onPlay}
       accessibilityRole="button"
       accessibilityLabel={`Play ${surah.english}`}
-      style={({ pressed }) => [
-        styles.row,
-        striped && styles.rowStriped,
-        pressed && styles.rowPressed,
-      ]}
+      style={({ pressed }) => [styles.row, striped && styles.rowStriped, pressed && styles.rowPressed]}
     >
       <Text style={styles.number}>{surah.id}</Text>
 
       <View style={styles.names}>
-        <Text style={styles.english} numberOfLines={1}>
-          {surah.english}
-          <Text style={styles.meaning}> — {surah.meaning}</Text>
-        </Text>
+        <View style={styles.topLine}>
+          <Text style={styles.english}>{surah.english}</Text>
+          <Text style={styles.arabic}>{surah.arabic}</Text>
+        </View>
+        <View style={styles.bottomLine}>
+          <Text style={styles.meaning}>{surah.meaning}</Text>
+          <Text style={styles.ayahs}>{surah.ayahs} ayahs</Text>
+        </View>
       </View>
-
-      <Text style={styles.arabic} numberOfLines={1}>
-        {surah.arabic}
-      </Text>
-
-      <Text style={styles.ayahs}>{surah.ayahs}</Text>
 
       <View style={styles.actions}>
         <FlatIconButton size={30} onPress={onPlay} accessibilityLabel={`Play ${surah.english}`}>
@@ -63,8 +57,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
     paddingHorizontal: 10,
+    paddingVertical: 8,
     gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -76,38 +70,49 @@ const styles = StyleSheet.create({
     backgroundColor: colors.greenLight,
   },
   number: {
-    width: 26,
+    width: 22,
     fontFamily: fonts.uiMedium,
     fontSize: 12,
     color: colors.inkMuted,
-    textAlign: 'right',
   },
   names: {
     flex: 1,
     minWidth: 0,
+    gap: 2,
+  },
+  topLine: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   english: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 13,
+    flexShrink: 1,
+    fontFamily: fonts.uiBold,
+    fontSize: 14,
     color: colors.ink,
   },
+  arabic: {
+    fontFamily: fonts.arabic,
+    fontSize: 17,
+    color: colors.ink,
+  },
+  bottomLine: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   meaning: {
+    flexShrink: 1,
     fontFamily: fonts.ui,
     fontSize: 12,
     color: colors.inkMuted,
   },
-  arabic: {
-    fontFamily: fonts.arabic,
-    fontSize: 16,
-    color: colors.ink,
-    marginHorizontal: 4,
-  },
   ayahs: {
-    width: 30,
     fontFamily: fonts.ui,
     fontSize: 11,
     color: colors.inkMuted,
-    textAlign: 'center',
   },
   actions: {
     flexDirection: 'row',

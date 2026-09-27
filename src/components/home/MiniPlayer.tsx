@@ -11,39 +11,44 @@ interface MiniPlayerProps {
   isPlaying: boolean;
   onTogglePlay: () => void;
   onOpen: () => void;
+  bottomInset?: number;
 }
 
-export function MiniPlayer({ surah, reciter, isPlaying, onTogglePlay, onOpen }: MiniPlayerProps) {
+export function MiniPlayer({ surah, reciter, isPlaying, onTogglePlay, onOpen, bottomInset = 0 }: MiniPlayerProps) {
   return (
     <Pressable
       onPress={onOpen}
       disabled={!surah}
       accessibilityRole="button"
       accessibilityLabel="Open now playing"
-      style={styles.bar}
+      style={[styles.bar, { paddingBottom: 8 + bottomInset }]}
     >
       <View style={styles.info}>
         {surah ? (
-          <Text style={styles.trackText} numberOfLines={1}>
-            {surah.english} — {reciter.name}
-          </Text>
+          <>
+            <Text style={styles.trackText} numberOfLines={1}>
+              {surah.english}
+            </Text>
+            <Text style={styles.reciterText} numberOfLines={1}>
+              {reciter.name}
+            </Text>
+          </>
         ) : (
           <Text style={styles.placeholder}>Select a surah to begin</Text>
         )}
       </View>
 
       <FlatIconButton
-        variant="filled"
-        size={34}
+        size={36}
         onPress={(e) => {
           e.stopPropagation();
           if (surah) onTogglePlay();
         }}
         disabled={!surah}
         accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
-        style={!surah && styles.disabled}
+        style={[styles.playButton, !surah && styles.disabled]}
       >
-        {isPlaying ? <PauseIcon size={12} color={colors.white} /> : <PlayIcon size={12} color={colors.white} />}
+        {isPlaying ? <PauseIcon size={13} color={colors.greenDark} /> : <PlayIcon size={13} color={colors.greenDark} />}
       </FlatIconButton>
     </Pressable>
   );
@@ -51,28 +56,39 @@ export function MiniPlayer({ surah, reciter, isPlaying, onTogglePlay, onOpen }: 
 
 const styles = StyleSheet.create({
   bar: {
-    height: 52,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 10,
-    backgroundColor: colors.greenDark,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    gap: 12,
+    backgroundColor: colors.green,
+    borderTopWidth: 2,
+    borderTopColor: colors.gold,
   },
   info: {
     flex: 1,
     minWidth: 0,
   },
   trackText: {
-    fontFamily: fonts.uiMedium,
+    fontFamily: fonts.uiBold,
     fontSize: 13,
     color: colors.white,
+  },
+  reciterText: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 1,
   },
   placeholder: {
     fontFamily: fonts.ui,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.55)',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  playButton: {
+    backgroundColor: colors.goldLight,
+    borderWidth: 0,
   },
   disabled: {
     opacity: 0.4,

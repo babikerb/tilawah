@@ -1,11 +1,15 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { IslamicPatternBackground } from './IslamicPatternBackground';
 import { colors, fonts } from '../../theme/tokens';
 
+/** Dark-green header bar. Also pins the status bar to light (white) icons,
+ * since it sits directly under this dark background. */
 export function AppHeader({ topInset }: { topInset: number }) {
   return (
     <View style={[styles.header, { paddingTop: topInset + 10 }]}>
+      <StatusBar style="light" />
       <IslamicPatternBackground opacity={0.12} />
       <Text style={styles.title}>Tilawah</Text>
       <Text style={styles.titleArabic}>تِلاوَة</Text>

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { AppBackground } from '../components/ui/AppBackground';
@@ -79,73 +79,71 @@ export default function HomeScreen() {
     <AppBackground>
       <AppHeader topInset={insets.top} />
 
-      <SectionBox title="CONTINUE LISTENING" titleArabic="متابعة الاستماع">
-        <View style={styles.continueRow}>
-          <View style={styles.continueNames}>
-            <View style={styles.continueTitleRow}>
-              <Text style={styles.continueEnglish}>{continueSurah.english}</Text>
-              <Text style={styles.continueArabic}>{continueSurah.arabic}</Text>
-            </View>
-            <Text style={styles.continueMeta}>
-              {continueSurah.meaning} · {reciter.name}
-            </Text>
-          </View>
-          <FlatIconButton
-            variant="filled"
-            size={36}
-            onPress={() => handlePlay(continueSurah)}
-            accessibilityLabel={`Play ${continueSurah.english}`}
-          >
-            <PlayIcon size={12} color={colors.white} />
-          </FlatIconButton>
-        </View>
-      </SectionBox>
-
-      <View style={styles.toolbar}>
-        <View style={styles.searchBox}>
-          <SearchIcon color={colors.inkMuted} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search…"
-            placeholderTextColor={colors.inkMuted}
-            style={styles.searchInput}
-          />
-          {query.length > 0 && (
-            <Pressable onPress={() => setQuery('')} hitSlop={8}>
-              <Text style={styles.clearText}>×</Text>
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.segmented}>
-          {(['all', 'saved'] as const).map((f) => (
-            <Pressable
-              key={f}
-              onPress={() => setFilter(f)}
-              style={[styles.segment, filter === f && styles.segmentActive]}
-            >
-              <Text style={[styles.segmentText, filter === f && styles.segmentTextActive]}>
-                {f === 'all' ? 'All' : savedIds.length > 0 ? `Saved (${savedIds.length})` : 'Saved'}
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <SectionBox title="CONTINUE LISTENING" titleArabic="متابعة الاستماع">
+          <View style={styles.continueRow}>
+            <View style={styles.continueNames}>
+              <View style={styles.continueTitleRow}>
+                <Text style={styles.continueEnglish}>{continueSurah.english}</Text>
+                <Text style={styles.continueArabic}>{continueSurah.arabic}</Text>
+              </View>
+              <Text style={styles.continueMeta}>
+                {continueSurah.meaning} · {reciter.name}
               </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+            </View>
+            <FlatIconButton
+              variant="filled"
+              size={36}
+              onPress={() => handlePlay(continueSurah)}
+              accessibilityLabel={`Play ${continueSurah.english}`}
+            >
+              <PlayIcon size={12} color={colors.white} />
+            </FlatIconButton>
+          </View>
+        </SectionBox>
 
-      <SectionBox title="SURAHS" titleArabic="السور" style={styles.listBox} noBodyPadding>
-        {showEmptySaved || rows.length === 0 ? (
-          <EmptyState type={filter === 'saved' && !query ? 'saved' : 'search'} />
-        ) : (
-          <FlatList
-            style={styles.list}
-            data={rows}
-            keyExtractor={(item, i) => (item.kind === 'header' ? `j${item.juz}` : `s${item.surah.id}`) + i}
-            renderItem={({ item }) =>
+        <View style={styles.toolbar}>
+          <View style={styles.searchBox}>
+            <SearchIcon color={colors.inkMuted} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search…"
+              placeholderTextColor={colors.inkMuted}
+              style={styles.searchInput}
+            />
+            {query.length > 0 && (
+              <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                <Text style={styles.clearText}>×</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <View style={styles.segmented}>
+            {(['all', 'saved'] as const).map((f) => (
+              <Pressable
+                key={f}
+                onPress={() => setFilter(f)}
+                style={[styles.segment, filter === f && styles.segmentActive]}
+              >
+                <Text style={[styles.segmentText, filter === f && styles.segmentTextActive]}>
+                  {f === 'all' ? 'All' : savedIds.length > 0 ? `Saved (${savedIds.length})` : 'Saved'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <SectionBox title="SURAHS" titleArabic="السور" noBodyPadding>
+          {showEmptySaved || rows.length === 0 ? (
+            <EmptyState type={filter === 'saved' && !query ? 'saved' : 'search'} />
+          ) : (
+            rows.map((item, i) =>
               item.kind === 'header' ? (
-                <JuzHeader juz={item.juz} />
+                <JuzHeader key={`j${item.juz}-${i}`} juz={item.juz} />
               ) : (
                 <SurahRow
+                  key={item.surah.id}
                   surah={item.surah}
                   saved={isSaved(item.surah.id)}
                   onToggleSave={() => toggleSave(item.surah.id)}
@@ -153,25 +151,30 @@ export default function HomeScreen() {
                   striped={item.striped}
                 />
               )
-            }
-          />
-        )}
-      </SectionBox>
+            )
+          )}
+        </SectionBox>
+      </ScrollView>
 
-      <View style={{ paddingBottom: insets.bottom }}>
-        <MiniPlayer
-          surah={currentSurah}
-          reciter={reciter}
-          isPlaying={isPlaying}
-          onTogglePlay={togglePlay}
-          onOpen={() => currentSurah && router.push('/player')}
-        />
-      </View>
+      <MiniPlayer
+        surah={currentSurah}
+        reciter={reciter}
+        isPlaying={isPlaying}
+        onTogglePlay={togglePlay}
+        onOpen={() => currentSurah && router.push('/player')}
+        bottomInset={insets.bottom}
+      />
     </AppBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 16,
+  },
   continueRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -253,12 +256,5 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: colors.white,
-  },
-  listBox: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  list: {
-    flex: 1,
   },
 });
