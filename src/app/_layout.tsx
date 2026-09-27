@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import * as SplashScreen from 'expo-splash-screen';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { useAppFonts } from '../theme/useAppFonts';
 import { PlaybackProvider } from '../lib/PlaybackProvider';
 
@@ -21,6 +22,13 @@ export default function RootLayout() {
   useEffect(() => {
     onLayoutRootView();
   }, [onLayoutRootView]);
+
+  useEffect(() => {
+    // app.json's "orientation": "portrait" only takes effect in a real
+    // native build ("a build-time configuration, it has no effect in Expo
+    // Go" per Expo's own docs) — this runtime lock covers Expo Go too.
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+  }, []);
 
   if (!fontsLoaded && !fontError) {
     return null;

@@ -10,6 +10,7 @@ import {
   type TextStyle,
 } from 'react-native';
 import { colors, fonts } from '../../theme/tokens';
+import { splitAyahWords } from '../../lib/arabicWords';
 import type { Ayah } from '../../data/types';
 
 interface AyahCardProps {
@@ -68,7 +69,7 @@ export function AyahCard({
   bismillahWordCount,
 }: AyahCardProps) {
   const ayah = ayahs[index];
-  const words = ayah?.arabic.split(/\s+/).filter(Boolean) ?? [];
+  const words = ayah ? splitAyahWords(ayah.arabic) : [];
   const bismillahWords = bismillahWordCount > 0 ? words.slice(0, bismillahWordCount) : [];
   const ayahWords = bismillahWordCount > 0 ? words.slice(bismillahWordCount) : words;
 

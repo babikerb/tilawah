@@ -167,19 +167,57 @@ displayed ayah to auto-sync with what's playing:
     and monotonic regardless). No code fix exists beyond what the data
     already does — genuine backtracking would need real audio
     realignment, out of scope here.
-  - Bismillah rendered as its own line above the ayah, with independent
-    highlighting, wherever the data proves a clean boundary exists
-    (`bismillahWordCount` in `PlaybackProvider`, always exactly 4 or 0 —
-    never a fuzzy guess). Falls back to today's combined display for
-    Al-Fatihah (ayah 1 *is* the Bismillah), At-Tawbah (has none), the ~29
-    "disjointed letter" surahs (Al-Baqarah, Ya-Sin, etc. — confirmed via
-    real data that the alignment tool collapses these into one blob with
-    zero internal word boundaries, e.g. Al-Baqarah ayah 1 came back as a
-    single 7-second segment spanning all 5 words), and Husary/Abdul Basit
-    (no word-timing data at all, so no boundary to find). No separate
-    per-reciter Bismillah audio needed — same single audio file already
-    contains it; this only changes how the existing words are grouped
-    for display.
+  - **Stop-mark bug (fixed).** The Uthmani text encodes small waqf/pause
+    marks (ۖ ۗ ۘ ۙ ۚ ۛ ۜ, U+06D6-U+06ED) as their own whitespace-separated
+    tokens. A naive `.split(/\s+/)` counted them as words, silently
+    shifting every highlight index after the first mark in an ayah.
+    Confirmed against real data: Al-Baqarah 255 (Ayat al-Kursi) has 58
+    whitespace tokens but exactly 50 word segments in the timing data —
+    the difference is its 8 stop marks. `src/lib/arabicWords.ts`'s
+    `splitAyahWords()` now merges a mark-only token into the previous real
+    word (still displayed, doesn't consume its own index) instead of
+    giving it a slot; verified it produces exactly 50 words for that ayah.
+  - **Highlight bleed-over between ayahs (fixed).** `activeWordRange` now
+    checks `loadedUriRef.current === uri` before computing anything — the
+    instant `ayahIndex` changes, `uri` points at the new ayah but `status`
+    (currentTime included) still reflects the *old* clip until the
+    player.replace() effect has actually run. Without the guard, leftover
+    currentTime from the old ayah could coincidentally land inside a valid
+    segment for the new ayah's unrelated word timing and briefly highlight
+    the wrong word.
+  - **Bismillah is now a real separate audio clip**, not just a display
+    split (superseding the earlier "no separate audio needed" note below
+    — the earlier version left Bismillah's duration bundled into ayah 1's
+    displayed timing, which is exactly what made ayah 1 "feel off"
+    compared to every other ayah). The clip is this reciter's own
+    Al-Fatihah ayah 1 — a real, independent recording of exactly this
+    phrase, fetched once per reciter (it's the same file for every surah)
+    and cached in `PlaybackProvider`. Sequencing: play the clip, then seek
+    ayah 1's own file straight past its embedded copy of the Bismillah
+    (using the same `bismillahBoundary.endMs` used for the display split)
+    instead of replaying it — so it's heard exactly once. Ayah 1's
+    displayed duration/progress is offset-adjusted by that skip amount
+    (`skipOffsetSec` in `PlaybackProvider`) so it reads as just the real
+    content's length, matching every other ayah. "Repeat ayah" on ayah 1
+    seeks to the offset, not to 0, for the same reason. Eligibility
+    unchanged from the display-split version: Al-Fatihah, At-Tawbah, the
+    ~29 disjointed-letter surahs, and Husary/Abdul Basit all keep the
+    simple combined-file behavior (no boundary to seek to, so a separate
+    clip would just play Bismillah twice in a row).
+    Known simplification: if the per-reciter clip or boundary data hasn't
+    finished loading by the time ayah 1's audio needs to start, playback
+    falls back to ayah 1's own combined file with no split for that one
+    visit (rather than block playback waiting on it) — Bismillah is still
+    heard, just via the old embedded path that one time.
+
+## Orientation lock
+
+`app.json`'s `"orientation": "portrait"` was already set, but per Expo's
+own docs that's "a build-time configuration, it has no effect in Expo Go"
+— which is almost certainly how the user saw it rotate, since Expo Go is
+what's recommended for testing without a signed dev-client build. Added
+`expo-screen-orientation`'s `lockAsync(PORTRAIT_UP)` at the root layout as
+a runtime lock, which works inside Expo Go too.
 
 ## Repeat modes
 
