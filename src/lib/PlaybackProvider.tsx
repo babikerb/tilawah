@@ -242,16 +242,32 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // advancing between ayahs has no network gap. Sequential (not parallel) so
   // a long surah doesn't fire hundreds of simultaneous downloads at once —
   // it still finishes well ahead of playback reaching later ayahs.
+  //
+  // The ayah/clip about to actually play right now is deliberately skipped:
+  // `.replace()` (in the load-current-uri effect below) and `preload()` both
+  // manipulate the *same* native preloaded-source registry for a given URL —
+  // `.replace()` will pull a matching in-flight preload's item straight out
+  // from under it. Racing that against our own live playback call for the
+  // one URL with the least lead time before being needed (right after the
+  // Bismillah clip, often just seconds) is exactly what caused a real native
+  // crash ("Exception in HostFunction: player.replace(...)") on ayah 1 of
+  // some surahs. Every other ayah has the entire preceding ayahs' worth of
+  // playback time as a safety margin, so this only costs the "zero gap"
+  // optimization for the very first ayah/clip of a freshly-started surah.
   useEffect(() => {
     if (ayahs.length === 0) return;
     let cancelled = false;
     clearAllPreloadedSources().catch(() => {});
+    const activeIndex = ayahIndex;
     (async () => {
-      if (bismillahClip?.audioUrl) {
+      if (bismillahClip?.audioUrl && activeIndex !== 0) {
         await preload({ uri: bismillahClip.audioUrl }).catch(() => {});
       }
-      for (const ayah of ayahs) {
-        if (cancelled || !ayah.audioUrl) continue;
+      for (let i = 0; i < ayahs.length; i++) {
+        if (cancelled) break;
+        if (i === activeIndex) continue;
+        const ayah = ayahs[i];
+        if (!ayah.audioUrl) continue;
         await preload({ uri: ayah.audioUrl }).catch(() => {});
       }
     })();
@@ -262,6 +278,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // change per surah) and preloading it once here per surah load is
     // already redundant-but-harmless; re-running this whole surah preload
     // queue every time the clip reference happens to update isn't needed.
+    // ayahIndex is intentionally excluded too: it's only read once, as a
+    // snapshot of "which ayah is about to play" for this surah's preload
+    // sweep — it shouldn't restart the whole sweep on every ayah change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ayahs]);
 
