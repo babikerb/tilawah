@@ -46,6 +46,7 @@ export default function PlayerScreen() {
     progress,
     seekToFraction,
     activeWordRange,
+    bismillahWordCount,
   } = usePlayback();
 
   const surah = currentSurahId ? getSurah(currentSurahId) : undefined;
@@ -93,6 +94,7 @@ export default function PlayerScreen() {
           juzText={juzLabel(surah.juz)}
           totalAyahs={surah.ayahs}
           activeWordRange={activeWordRange}
+          bismillahWordCount={bismillahWordCount}
         />
       </SectionBox>
 

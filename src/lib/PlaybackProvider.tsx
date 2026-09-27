@@ -12,6 +12,9 @@ import { fetchSurahAyahs } from './quranApi';
 import { fetchWordTiming, type WordSegment } from './wordTiming';
 import type { Ayah } from '../data/types';
 
+/** بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ — always exactly 4 words. */
+const BISMILLAH_WORD_COUNT = 4;
+
 interface PlaybackContextValue {
   ayahs: Ayah[];
   ayahIndex: number;
@@ -26,6 +29,14 @@ interface PlaybackContextValue {
   /** [wordIndexStart, wordIndexEnd) currently being recited, or null when
    * word-timing isn't available for this reciter/ayah. */
   activeWordRange: [number, number] | null;
+  /** How many leading words of the current ayah's text are the Bismillah,
+   * for display purposes (rendering it as its own line above the ayah
+   * proper). 0 when not applicable (Al-Fatihah ayah 1 *is* the Bismillah;
+   * At-Tawbah has none) or when word-timing can't confirm a clean boundary
+   * (e.g. the "disjointed letter" surah openings, which the alignment
+   * tool couldn't separate into words at all). Always 4 or 0 — never a
+   * guess at a fuzzy split. */
+  bismillahWordCount: number;
 }
 
 const PlaybackContext = createContext<PlaybackContextValue | null>(null);
@@ -207,6 +218,27 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     return segment ? [segment[0], segment[1]] : null;
   }, [ayahs, ayahIndex, wordTimingBySurah, status.currentTime]);
 
+  // Bismillah is baked into ayah 1's text/audio for every surah except
+  // Al-Fatihah (where ayah 1 *is* the Bismillah, standalone) and At-Tawbah
+  // (which has none). Splitting it out for display only when the
+  // word-timing data proves a clean boundary exists — some ayahs (notably
+  // the ~29 surahs opening with disjointed letters, e.g. Al-Baqarah's
+  // "الٓمٓ") collapse into one alignment blob with no internal word
+  // boundaries at all, so a split there would be a guess, not a fact.
+  const bismillahWordCount = useMemo<number>(() => {
+    const ayah = ayahs[ayahIndex];
+    if (!currentSurahId || currentSurahId === 1 || currentSurahId === 9) return 0;
+    if (!ayah || ayah.numberInSurah !== 1) return 0;
+    const segments = wordTimingBySurah?.get(1);
+    if (!segments) return 0;
+    const spansAcrossBoundary = segments.some(
+      ([start, end]) => start < BISMILLAH_WORD_COUNT && end > BISMILLAH_WORD_COUNT
+    );
+    if (spansAcrossBoundary) return 0;
+    const hasCleanBoundary = segments.some(([, end]) => end === BISMILLAH_WORD_COUNT);
+    return hasCleanBoundary ? BISMILLAH_WORD_COUNT : 0;
+  }, [currentSurahId, ayahs, ayahIndex, wordTimingBySurah]);
+
   const value = useMemo<PlaybackContextValue>(
     () => ({
       ayahs,
@@ -222,8 +254,20 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         if (status.duration > 0) player.seekTo(fraction * status.duration);
       },
       activeWordRange,
+      bismillahWordCount,
     }),
-    [ayahs, ayahIndex, loading, error, status.currentTime, status.duration, status.isBuffering, player, activeWordRange]
+    [
+      ayahs,
+      ayahIndex,
+      loading,
+      error,
+      status.currentTime,
+      status.duration,
+      status.isBuffering,
+      player,
+      activeWordRange,
+      bismillahWordCount,
+    ]
   );
 
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;

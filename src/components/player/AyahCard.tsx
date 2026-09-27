@@ -1,5 +1,14 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+} from 'react-native';
 import { colors, fonts } from '../../theme/tokens';
 import type { Ayah } from '../../data/types';
 
@@ -13,6 +22,38 @@ interface AyahCardProps {
   totalAyahs: number;
   /** [wordIndexStart, wordIndexEnd) currently being recited, or null. */
   activeWordRange: [number, number] | null;
+  /** Leading words of `ayah.arabic` that are the Bismillah, rendered on its
+   * own line above the ayah. 0 when not applicable. */
+  bismillahWordCount: number;
+}
+
+/** Renders `words`, highlighting whichever fall within `activeWordRange`
+ * (given in indices relative to the *full* ayah, hence `indexOffset`). */
+function WordText({
+  words,
+  indexOffset,
+  activeWordRange,
+  style,
+}: {
+  words: string[];
+  indexOffset: number;
+  activeWordRange: [number, number] | null;
+  style: StyleProp<TextStyle>;
+}) {
+  return (
+    <Text style={style}>
+      {words.map((word, i) => {
+        const globalIndex = i + indexOffset;
+        const isActive = !!activeWordRange && globalIndex >= activeWordRange[0] && globalIndex < activeWordRange[1];
+        return (
+          <Text key={globalIndex} style={isActive ? styles.wordActive : undefined}>
+            {word}
+            {i < words.length - 1 ? ' ' : ''}
+          </Text>
+        );
+      })}
+    </Text>
+  );
 }
 
 export function AyahCard({
@@ -24,9 +65,12 @@ export function AyahCard({
   juzText,
   totalAyahs,
   activeWordRange,
+  bismillahWordCount,
 }: AyahCardProps) {
   const ayah = ayahs[index];
   const words = ayah?.arabic.split(/\s+/).filter(Boolean) ?? [];
+  const bismillahWords = bismillahWordCount > 0 ? words.slice(0, bismillahWordCount) : [];
+  const ayahWords = bismillahWordCount > 0 ? words.slice(bismillahWordCount) : words;
 
   return (
     <View style={styles.card}>
@@ -42,17 +86,20 @@ export function AyahCard({
           // spinner or error that would otherwise interrupt already-working
           // content and playback.
           <>
-            <Text style={styles.arabic}>
-              {words.map((word, i) => {
-                const isActive = !!activeWordRange && i >= activeWordRange[0] && i < activeWordRange[1];
-                return (
-                  <Text key={i} style={isActive ? styles.wordActive : undefined}>
-                    {word}
-                    {i < words.length - 1 ? ' ' : ''}
-                  </Text>
-                );
-              })}
-            </Text>
+            {bismillahWords.length > 0 && (
+              <WordText
+                words={bismillahWords}
+                indexOffset={0}
+                activeWordRange={activeWordRange}
+                style={styles.bismillah}
+              />
+            )}
+            <WordText
+              words={ayahWords}
+              indexOffset={bismillahWordCount}
+              activeWordRange={activeWordRange}
+              style={styles.arabic}
+            />
             <View style={styles.divider} />
             <Text style={styles.translation}>{ayah.translation}</Text>
           </>
@@ -102,6 +149,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingVertical: 22,
+  },
+  bismillah: {
+    fontFamily: fonts.quran,
+    fontSize: 20,
+    color: colors.inkMuted,
+    textAlign: 'center',
+    lineHeight: 40,
+    writingDirection: 'rtl',
+    marginBottom: 10,
   },
   arabic: {
     fontFamily: fonts.quran,

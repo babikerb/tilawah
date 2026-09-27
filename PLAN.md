@@ -159,6 +159,27 @@ displayed ayah to auto-sync with what's playing:
     index, and `AyahCard` highlights the whole range together.
   - `useAudioPlayer`'s `updateInterval` dropped to 100ms (from the
     default) for smoother highlight transitions between fast words.
+  - Reciter backtracking/repetition: investigated per user question.
+    The alignment data already absorbs minor hesitations/repeats by
+    stretching that word's time-window rather than modeling a literal
+    repeat (verified: 14-26% of ayahs across our 3 reciters have non-zero
+    insertion/deletion counts, and their word-index sequences stay clean
+    and monotonic regardless). No code fix exists beyond what the data
+    already does — genuine backtracking would need real audio
+    realignment, out of scope here.
+  - Bismillah rendered as its own line above the ayah, with independent
+    highlighting, wherever the data proves a clean boundary exists
+    (`bismillahWordCount` in `PlaybackProvider`, always exactly 4 or 0 —
+    never a fuzzy guess). Falls back to today's combined display for
+    Al-Fatihah (ayah 1 *is* the Bismillah), At-Tawbah (has none), the ~29
+    "disjointed letter" surahs (Al-Baqarah, Ya-Sin, etc. — confirmed via
+    real data that the alignment tool collapses these into one blob with
+    zero internal word boundaries, e.g. Al-Baqarah ayah 1 came back as a
+    single 7-second segment spanning all 5 words), and Husary/Abdul Basit
+    (no word-timing data at all, so no boundary to find). No separate
+    per-reciter Bismillah audio needed — same single audio file already
+    contains it; this only changes how the existing words are grouped
+    for display.
 
 ## Repeat modes
 
