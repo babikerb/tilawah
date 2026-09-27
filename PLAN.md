@@ -126,12 +126,39 @@ displayed ayah to auto-sync with what's playing:
   architecture; Saud Al-Shuraim (`ar.saudalshuraim`), his replacement, was
   then found to have no *per-ayah* files once the architecture changed —
   replaced again with Al-Husary.
-- Not done: true word-level highlighting. Needs a specialized timing
-  dataset (Al Quran Cloud has none); a research project called
-  `quran-align` publishes word/ayah timestamps for a handful of reciters
-  synced to everyayah.com audio, not our current CDN — flagged as a
-  distinct follow-up to research, not guaranteed to pan out with our
-  reciters/audio source.
+- **Word-level highlighting: implemented**, for 3 of 5 reciters. Researched
+  two options: the official Quran Foundation API (real word/ayah timestamp
+  segments, but requires OAuth `client_id`/`client_secret` that "must stay
+  on your backend" — i.e. a server we don't have, plus the user registering
+  a developer account) vs. `quran-align` (a static, freely downloadable
+  CC-BY-4.0 dataset, no backend needed). Went with `quran-align`.
+  - Verified — not assumed — that our CDN's audio is usable with this
+    data: byte-for-byte compared our per-ayah files against everyayah.com's
+    (what the data was aligned against) for all 5 reciters. **Alafasy,
+    As-Sudais, and Al-Minshawi are audio-identical** (only container-level
+    differences: a trailing ID3 tag, a LAME header, etc. — zero difference
+    in the actual audio frames). **Al-Husary is a different recording**
+    (mismatched from byte 0, even at matching bitrate) — excluded. **Abdul
+    Basit is unconfirmed** (~100ms estimated duration drift, no exact
+    bitrate match available) — excluded per the user's choice rather than
+    risk visibly-wrong highlighting.
+  - Also verified word-tokenization matches between the two independent
+    data sources (whitespace-splitting our `quran-uthmani` text produces
+    the same per-ayah word counts as `quran-align`'s segments, checked
+    against all 7 ayahs of Al-Fatihah).
+  - `wordtiming/<edition>/<surahId>.json` — the original per-reciter
+    dataset split into one file per surah (114 files/reciter) for on-demand
+    loading, matching our existing lazy-fetch pattern. Attribution in
+    `wordtiming/ATTRIBUTION.md` (CC-BY-4.0 requires it).
+  - `src/lib/wordTiming.ts` fetches these from this repo via jsDelivr's
+    GitHub CDN proxy (no hosting/backend needed) — a miss (unsupported
+    reciter, network failure) just means no highlighting, never an error.
+  - A "segment" can span more than one word (fast-spoken words the
+    alignment tool couldn't cleanly separate) — `activeWordRange` in
+    `PlaybackProvider` is a `[start, end)` word-index range, not a single
+    index, and `AyahCard` highlights the whole range together.
+  - `useAudioPlayer`'s `updateInterval` dropped to 100ms (from the
+    default) for smoother highlight transitions between fast words.
 
 ## Known simplifications vs. the Figma prototype (pre-redesign, may be stale)
 

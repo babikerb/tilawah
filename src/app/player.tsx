@@ -35,8 +35,18 @@ export default function PlayerScreen() {
   const toggleRepeat = usePlayerStore((s) => s.toggleRepeat);
   const setReciter = usePlayerStore((s) => s.setReciter);
 
-  const { ayahs, ayahIndex, setAyahIndex, loading, error, currentTime, duration, progress, seekToFraction } =
-    usePlayback();
+  const {
+    ayahs,
+    ayahIndex,
+    setAyahIndex,
+    loading,
+    error,
+    currentTime,
+    duration,
+    progress,
+    seekToFraction,
+    activeWordRange,
+  } = usePlayback();
 
   const surah = currentSurahId ? getSurah(currentSurahId) : undefined;
 
@@ -82,6 +92,7 @@ export default function PlayerScreen() {
           onSelectIndex={setAyahIndex}
           juzText={juzLabel(surah.juz)}
           totalAyahs={surah.ayahs}
+          activeWordRange={activeWordRange}
         />
       </SectionBox>
 

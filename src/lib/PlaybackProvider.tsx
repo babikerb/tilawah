@@ -9,6 +9,7 @@ import {
 import { usePlayerStore } from '../store/usePlayerStore';
 import { getSurah } from '../data/surahs';
 import { fetchSurahAyahs } from './quranApi';
+import { fetchWordTiming, type WordSegment } from './wordTiming';
 import type { Ayah } from '../data/types';
 
 interface PlaybackContextValue {
@@ -22,6 +23,9 @@ interface PlaybackContextValue {
   isBuffering: boolean;
   progress: number;
   seekToFraction: (fraction: number) => void;
+  /** [wordIndexStart, wordIndexEnd) currently being recited, or null when
+   * word-timing isn't available for this reciter/ayah. */
+  activeWordRange: [number, number] | null;
 }
 
 const PlaybackContext = createContext<PlaybackContextValue | null>(null);
@@ -39,9 +43,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [ayahIndex, setAyahIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [wordTimingBySurah, setWordTimingBySurah] = useState<Map<number, WordSegment[]> | null>(null);
 
   const uri = ayahs[ayahIndex]?.audioUrl || null;
-  const player = useAudioPlayer(uri ? { uri } : null);
+  const player = useAudioPlayer(uri ? { uri } : null, { updateInterval: 100 });
   const status = useAudioPlayerStatus(player);
 
   const loadedUriRef = useRef<string | null>(null);
@@ -104,6 +109,25 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSurahId, reciter.edition]);
+
+  // Word-level highlighting is only available for a subset of reciters
+  // (verified audio-identical to the source the timing data was aligned
+  // against — see wordTiming.ts). A miss here just means no highlighting;
+  // it never blocks or errors the surrounding ayah/audio experience.
+  useEffect(() => {
+    if (!currentSurahId) return;
+    let cancelled = false;
+    // Resetting to "no highlighting yet" for the newly-selected surah/reciter
+    // before the request resolves is intentional, not a synchronization bug.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWordTimingBySurah(null);
+    fetchWordTiming(currentSurahId, reciter.edition).then((data) => {
+      if (!cancelled) setWordTimingBySurah(data);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [currentSurahId, reciter.edition]);
 
   // Preload every ayah's audio for the whole surah as soon as it loads, so
@@ -169,6 +193,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.didJustFinish]);
 
+  const activeWordRange = useMemo<[number, number] | null>(() => {
+    const ayah = ayahs[ayahIndex];
+    const segments = ayah ? wordTimingBySurah?.get(ayah.numberInSurah) : undefined;
+    if (!segments) return null;
+    const ms = status.currentTime * 1000;
+    const segment = segments.find(([, , start, end]) => ms >= start && ms <= end);
+    return segment ? [segment[0], segment[1]] : null;
+  }, [ayahs, ayahIndex, wordTimingBySurah, status.currentTime]);
+
   const value = useMemo<PlaybackContextValue>(
     () => ({
       ayahs,
@@ -183,8 +216,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       seekToFraction: (fraction) => {
         if (status.duration > 0) player.seekTo(fraction * status.duration);
       },
+      activeWordRange,
     }),
-    [ayahs, ayahIndex, loading, error, status.currentTime, status.duration, status.isBuffering, player]
+    [ayahs, ayahIndex, loading, error, status.currentTime, status.duration, status.isBuffering, player, activeWordRange]
   );
 
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;

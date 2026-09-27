@@ -11,10 +11,22 @@ interface AyahCardProps {
   onSelectIndex: (i: number) => void;
   juzText: string;
   totalAyahs: number;
+  /** [wordIndexStart, wordIndexEnd) currently being recited, or null. */
+  activeWordRange: [number, number] | null;
 }
 
-export function AyahCard({ loading, error, ayahs, index, onSelectIndex, juzText, totalAyahs }: AyahCardProps) {
+export function AyahCard({
+  loading,
+  error,
+  ayahs,
+  index,
+  onSelectIndex,
+  juzText,
+  totalAyahs,
+  activeWordRange,
+}: AyahCardProps) {
   const ayah = ayahs[index];
+  const words = ayah?.arabic.split(/\s+/).filter(Boolean) ?? [];
 
   return (
     <View style={styles.card}>
@@ -30,7 +42,17 @@ export function AyahCard({ loading, error, ayahs, index, onSelectIndex, juzText,
           // spinner or error that would otherwise interrupt already-working
           // content and playback.
           <>
-            <Text style={styles.arabic}>{ayah.arabic}</Text>
+            <Text style={styles.arabic}>
+              {words.map((word, i) => {
+                const isActive = !!activeWordRange && i >= activeWordRange[0] && i < activeWordRange[1];
+                return (
+                  <Text key={i} style={isActive ? styles.wordActive : undefined}>
+                    {word}
+                    {i < words.length - 1 ? ' ' : ''}
+                  </Text>
+                );
+              })}
+            </Text>
             <View style={styles.divider} />
             <Text style={styles.translation}>{ayah.translation}</Text>
           </>
@@ -88,6 +110,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 58,
     writingDirection: 'rtl',
+  },
+  wordActive: {
+    backgroundColor: colors.greenLight,
+    color: colors.green,
   },
   divider: {
     width: '32%',
