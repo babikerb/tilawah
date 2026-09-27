@@ -172,6 +172,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // fallback (ayah 1's own file directly) because the clip wasn't ready in
   // time. Reset whenever we arrive at ayah 1 fresh.
   const [bismillahBypassed, setBismillahBypassed] = useState(false);
+  // Bumped on every fresh arrival at ayah 1 (see the bypass-reset effect
+  // below) so that a repeated Bismillah clip URL — the same file is reused
+  // across every surah for a given reciter — still registers as a new
+  // playback request instead of being mistaken for one already loaded.
+  const [bismillahVisitId, setBismillahVisitId] = useState(0);
 
   // The written Bismillah prefixes ayah 1's *text* for every surah except
   // Al-Fatihah (where ayah 1 *is* the Bismillah, standalone) and At-Tawbah
@@ -198,12 +203,32 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // requests racing each other — meant the clip was often silently skipped
   // by pure timing luck instead of actually being unavailable.
   const waitingForBismillahClip = ayahIndex === 0 && bismillahEligible && !bismillahBypassed && !bismillahClip;
+  // True for the whole window where ayah 1 hasn't started loading yet
+  // because we're still deciding whether to play the Bismillah clip first
+  // (playing it, or still waiting on it to load). Used below to hold the
+  // rest-of-surah preload sweep off until that's settled — see its comment.
+  const bismillahDecisionPending = ayahIndex === 0 && bismillahEligible && !bismillahBypassed;
 
   const uri = bismillahPhase
     ? bismillahClip?.audioUrl || null
     : waitingForBismillahClip
       ? null
       : ayahs[ayahIndex]?.audioUrl || null;
+  // Identifies a single "playback request" for the load effect below and
+  // the staleness guards keyed off it. Almost always just `uri` itself —
+  // except the Bismillah clip is the exact same audioUrl across *every*
+  // surah for a given reciter (it's the reciter's own Al-Fatihah ayah-1
+  // recording, reused), so `uri` alone can't tell two different visits to
+  // it apart. If a bismillah-eligible surah is swapped to again before the
+  // previous one's clip naturally finished (or repeat-surah loops back to
+  // it), `uri` recomputes to a string that's already equal to what's
+  // currently loaded — React then sees no dependency change and never
+  // re-fires the load effect at all, so the clip just keeps playing
+  // whatever was left of the *previous* surah's instance instead of
+  // restarting for this one. Folding in bismillahVisitId (bumped on every
+  // fresh arrival at ayah 1 — see the bypass-reset effect) makes each visit
+  // distinct even when the underlying file repeats.
+  const requestKey = bismillahPhase ? `bismillah:${bismillahVisitId}` : uri;
   // Passing a changing `{ uri }` object here (instead of a stable initial
   // value) would make the hook itself recreate — release and reconstruct —
   // the underlying native player on every ayah/Bismillah change, racing our
@@ -217,13 +242,16 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const player = useAudioPlayer(null, { updateInterval: 100 });
   const status = useAudioPlayerStatus(player);
 
-  const loadedUriRef = useRef<string | null>(null);
-  // The uri we've *confirmed* genuinely loaded (via status.isLoaded), as
-  // opposed to loadedUriRef which just tracks which uri we've committed to
-  // loading. Guards the didJustFinish handler below against a stale
-  // "finished" signal bleeding over from the source that was just replaced
-  // — see that effect's comment for why this matters.
-  const finishArmedUriRef = useRef<string | null>(null);
+  // Keyed by requestKey, not raw uri — see the comment above requestKey's
+  // definition for why the distinction matters (a repeated Bismillah clip
+  // URL across surahs must still be treated as a new request).
+  const loadedRequestKeyRef = useRef<string | null>(null);
+  // The request we've *confirmed* genuinely loaded (via status.isLoaded), as
+  // opposed to loadedRequestKeyRef which just tracks which request we've
+  // committed to loading. Guards the didJustFinish handler below against a
+  // stale "finished" signal bleeding over from the source that was just
+  // replaced — see that effect's comment for why this matters.
+  const finishArmedKeyRef = useRef<string | null>(null);
   const lastSurahIdRef = useRef<number | null>(null);
   const lastGoodReciterIdRef = useRef<string>(reciterId);
   const prevAyahIndexForBismillahRef = useRef<number>(-1);
@@ -259,7 +287,24 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     /* eslint-disable react-hooks/set-state-in-effect */
     if (!hasFallbackContent) setLoading(true);
     setError(null);
-    if (isNewSurah) setAyahIndex(0);
+    if (isNewSurah) {
+      setAyahIndex(0);
+      // Leaving the previous surah's `ayahs` array sitting in state here
+      // (as opposed to a reciter switch, where that's a deliberate graceful
+      // fallback — see hasFallbackContent) is a real bug, not just stale
+      // data: for the render where ayahIndex resets to 0 but this fetch
+      // hasn't resolved yet, `uri` below falls through to
+      // `ayahs[0]?.audioUrl` — which is the *previous* surah's own ayah-1
+      // file, a real, validly-loadable URL, not the new surah's. The load
+      // effect can't tell that apart from a deliberate "play ayah 1
+      // directly" decision, so it commits to that stale file and locks in
+      // `bismillahBypassed = true` for the new surah in the very same
+      // render the bypass-reset effect below is trying to clear it —
+      // permanently and silently skipping Bismillah. Clearing it to `[]`
+      // here makes that render correctly resolve `uri` to `null` (nothing
+      // to load yet) instead of a stale-but-valid file.
+      setAyahs([]);
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
     fetchSurahAyahs(currentSurahId, reciter.edition)
       .then((data) => {
@@ -357,6 +402,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     const ayahJustBecameZero = prevAyahIndexForBismillahRef.current !== ayahIndex && ayahIndex === 0;
     if (ayahIndex === 0 && (surahChanged || ayahJustBecameZero)) {
       setBismillahBypassed(false);
+      setBismillahVisitId((v) => v + 1);
     }
     prevSurahIdForBismillahRef.current = currentSurahId;
     prevAyahIndexForBismillahRef.current = ayahIndex;
@@ -398,19 +444,29 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // some surahs. Every other ayah has the entire preceding ayahs' worth of
   // playback time as a safety margin, so this only costs the "zero gap"
   // optimization for the very first ayah/clip of a freshly-started surah.
+  //
+  // Held off entirely while bismillahDecisionPending: starting this sweep
+  // the instant ayahs arrive (which can be *seconds* before the Bismillah
+  // clip finishes playing) meant it spent that whole time sequentially
+  // downloading ayah 2, ayah 3, etc., competing for bandwidth right up
+  // until — and through — the exact moment ayah 1's own cold fetch needed
+  // to start. That's what actually caused the long pause after Bismillah:
+  // ayah 1 wasn't slow to fetch on its own, it was starved by this sweep
+  // already being mid-download for other ayahs. Waiting for the Bismillah
+  // question to be settled (played through, or bypassed) means this sweep
+  // doesn't start until ayah 1's own fetch has already begun, giving that
+  // fetch the network to itself for its own 800ms head start below instead
+  // of arriving to a pipe already saturated by unrelated ayahs.
   useEffect(() => {
-    if (ayahs.length === 0) return;
+    if (ayahs.length === 0 || bismillahDecisionPending) return;
     let cancelled = false;
     clearAllPreloadedSources().catch(() => {});
     const activeIndex = ayahIndex;
     (async () => {
-      // A short head start before hammering the network with this surah's
-      // own audio downloads — otherwise this sequential preload sweep,
-      // starting the instant ayahs arrive, directly competes for bandwidth
-      // with the small Bismillah-clip fetch that's very possibly racing it
-      // at that exact moment (see the grace-period effect above). Imperceptible
-      // here; playback itself doesn't reach any preloaded ayah for several
-      // seconds regardless, while the Bismillah clip plays first.
+      // A short head start before hammering the network with the rest of
+      // this surah's audio downloads, so ayah 1's own fetch (already under
+      // way by the time this runs — see above) isn't immediately joined by
+      // this sweep's downloads competing for the same bandwidth.
       if (activeIndex === 0) {
         await new Promise((resolve) => setTimeout(resolve, 800));
         if (cancelled) return;
@@ -437,7 +493,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // snapshot of "which ayah is about to play" for this surah's preload
     // sweep — it shouldn't restart the whole sweep on every ayah change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ayahs]);
+  }, [ayahs, bismillahDecisionPending]);
 
   // Load the current audio source (the Bismillah clip, or an ayah) whenever
   // it changes, and carry playback intent (keep playing if we were already
@@ -445,14 +501,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // see its comment for why (transient media-server hiccups, not real
   // failures).
   useEffect(() => {
-    if (!uri || loadedUriRef.current === uri) return;
-    loadedUriRef.current = uri;
+    if (!uri || loadedRequestKeyRef.current === requestKey) return;
+    loadedRequestKeyRef.current = requestKey;
     // Not armed for a "finished" signal until we've actually confirmed this
-    // uri loaded (see the arming effect and the didJustFinish handler
-    // below) — even if this exact uri (e.g. a reused Bismillah clip) was
+    // request loaded (see the arming effect and the didJustFinish handler
+    // below) — even if this exact request (e.g. a reused Bismillah clip) was
     // armed before, that confirmation was for a previous load and doesn't
     // carry over to this one.
-    finishArmedUriRef.current = null;
+    finishArmedKeyRef.current = null;
     let cancelled = false;
 
     (async () => {
@@ -461,10 +517,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       });
       if (cancelled) return;
       if (!replaced) {
-        // Retries exhausted — reset loadedUriRef so a later change (retry,
-        // reciter switch, next ayah) gets a fresh attempt instead of being
-        // permanently stuck thinking this uri already "loaded".
-        loadedUriRef.current = null;
+        // Retries exhausted — reset loadedRequestKeyRef so a later change
+        // (retry, reciter switch, next ayah) gets a fresh attempt instead of
+        // being permanently stuck thinking this request already "loaded".
+        loadedRequestKeyRef.current = null;
         // Reacting to a native module giving up (an external system
         // failing), not synchronizing React state with itself.
         setError('Could not play this audio. Try again or switch reciters.');
@@ -498,7 +554,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uri]);
+  }, [uri, requestKey]);
 
   useEffect(() => {
     if (!uri) return;
@@ -513,13 +569,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, uri]);
 
-  // Arms the current uri for didJustFinish once we've actually confirmed it
-  // loaded, rather than the instant we merely committed to loading it.
+  // Arms the current request for didJustFinish once we've actually confirmed
+  // it loaded, rather than the instant we merely committed to loading it.
   useEffect(() => {
-    if (loadedUriRef.current === uri && status.isLoaded) {
-      finishArmedUriRef.current = uri;
+    if (loadedRequestKeyRef.current === requestKey && status.isLoaded) {
+      finishArmedKeyRef.current = requestKey;
     }
-  }, [uri, status.isLoaded]);
+  }, [requestKey, status.isLoaded]);
 
   // When a clip finishes: the Bismillah clip hands off to ayah 1 proper.
   // Otherwise: "ayah" repeat replays the same ayah forever (doesn't
@@ -537,14 +593,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // finishing correctly hands off to ayah 1, then an inherited stale
     // finish immediately advances past ayah 1 to ayah 2 without it ever
     // actually playing.
-    if (finishArmedUriRef.current !== uri) return;
+    if (finishArmedKeyRef.current !== requestKey) return;
     // Reacting to the audio player (an external system) finishing a clip,
     // not synchronizing React state with itself.
     /* eslint-disable react-hooks/set-state-in-effect */
     if (bismillahPhase) {
       setBismillahBypassed(true);
     } else if (repeatMode === 'ayah') {
-      const shouldAbort = () => loadedUriRef.current !== uri;
+      const shouldAbort = () => loadedRequestKeyRef.current !== requestKey;
       callNativeWithRetry(() => player.seekTo(0), 'seekTo (ayah repeat)', { shouldAbort }).then((seeked) => {
         if (seeked) playWithRecovery(player, shouldAbort);
       });
@@ -572,9 +628,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // Without this check, a leftover currentTime from the old source can
     // coincidentally fall inside a valid segment range for the *new* one's
     // totally different word timing, highlighting the wrong word for a
-    // moment. loadedUriRef only catches up to `uri` once that effect has
-    // run, so this correctly reads as "not ready yet" right after a switch.
-    if (loadedUriRef.current !== uri) return null;
+    // moment. loadedRequestKeyRef only catches up to `requestKey` once that
+    // effect has run, so this correctly reads as "not ready yet" right after
+    // a switch.
+    if (loadedRequestKeyRef.current !== requestKey) return null;
     // The Bismillah clip just plays plainly in the background — no
     // highlighting or word-tracking of its own.
     if (bismillahPhase) return null;
@@ -592,7 +649,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // bismillahWordCount lines the two back up; it's 0 for every ayah
     // except ayah 1, so this is a no-op everywhere else.
     return [segment[0] + bismillahWordCount, segment[1] + bismillahWordCount];
-  }, [ayahs, ayahIndex, wordTimingBySurah, status.currentTime, uri, bismillahPhase, bismillahWordCount]);
+  }, [ayahs, ayahIndex, wordTimingBySurah, status.currentTime, requestKey, bismillahPhase, bismillahWordCount]);
 
   const value = useMemo<PlaybackContextValue>(() => {
     const duration = status.duration;
@@ -610,7 +667,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       seekToFraction: (fraction) => {
         if (duration > 0) {
           callNativeWithRetry(() => player.seekTo(fraction * duration), 'seekTo (scrub)', {
-            shouldAbort: () => loadedUriRef.current !== uri,
+            shouldAbort: () => loadedRequestKeyRef.current !== requestKey,
           });
         }
       },
@@ -628,7 +685,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     player,
     activeWordRange,
     bismillahWordCount,
-    uri,
+    requestKey,
   ]);
 
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
