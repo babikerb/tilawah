@@ -200,6 +200,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const lastSurahIdRef = useRef<number | null>(null);
   const lastGoodReciterIdRef = useRef<string>(reciterId);
   const prevAyahIndexForBismillahRef = useRef<number>(-1);
+  const prevSurahIdForBismillahRef = useRef<number | null>(null);
 
   useEffect(() => {
     setAudioModeAsync({
@@ -315,14 +316,24 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     };
   }, [reciter.edition]);
 
-  // Fresh arrival at ayah 1 (new surah, or looped back around via repeat
-  // surah) should offer the Bismillah again, if eligible.
+  // Fresh arrival at ayah 1 should offer the Bismillah again, if eligible —
+  // whether that's a new surah (swapped from the home list, autoplay to the
+  // next surah, etc.) or looping back around via repeat surah. A surah swap
+  // needs its own check, not just "ayahIndex changed to 0": swapping to a
+  // new surah while already sitting at ayahIndex 0 of the old one (e.g.
+  // right at the start of a surah) left ayahIndex unchanged at 0 across the
+  // swap, so the old "did ayahIndex just become 0" check never fired and
+  // the new surah silently inherited whatever bypassed state the previous
+  // surah had ended on.
   useEffect(() => {
-    if (prevAyahIndexForBismillahRef.current !== ayahIndex && ayahIndex === 0) {
+    const surahChanged = prevSurahIdForBismillahRef.current !== currentSurahId;
+    const ayahJustBecameZero = prevAyahIndexForBismillahRef.current !== ayahIndex && ayahIndex === 0;
+    if (ayahIndex === 0 && (surahChanged || ayahJustBecameZero)) {
       setBismillahBypassed(false);
     }
+    prevSurahIdForBismillahRef.current = currentSurahId;
     prevAyahIndexForBismillahRef.current = ayahIndex;
-  }, [ayahIndex]);
+  }, [ayahIndex, currentSurahId]);
 
   // Give the Bismillah clip a few seconds to load before giving up and
   // playing ayah 1 directly — genuinely unavailable (fetch failed, or this
