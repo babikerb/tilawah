@@ -38,6 +38,19 @@ function saveCachedBismillahClip(edition: string, clip: { audioUrl: string }): v
   AsyncStorage.setItem(BISMILLAH_CACHE_PREFIX + edition, JSON.stringify(clip)).catch(() => {});
 }
 
+interface RetryOptions {
+  /** Checked before every attempt (including the first) and again before
+   * each retry's backoff fires; returning true abandons the call with no
+   * further native calls. Without this, a retry loop for a uri that's
+   * since been superseded (e.g. the user swapped surahs again mid-retry)
+   * keeps calling into the native player regardless — a real source of
+   * concurrent/overlapping native calls on the same shared player object,
+   * which is exactly the kind of contention that can throw ("Session
+   * lookup failed") under rapid surah switching. */
+  shouldAbort?: () => boolean;
+  maxAttempts?: number;
+}
+
 /**
  * iOS's shared media server (`mediaserverd`) can crash and restart under
  * memory/CPU pressure — expo-audio's own `AudioStatus.mediaServicesDidReset`
@@ -52,9 +65,17 @@ function saveCachedBismillahClip(edition: string, clip: { audioUrl: string }): v
  * after a short, backing-off delay rides it out instead of dropping the call
  * (or, before these call sites were guarded, crashing the app).
  */
-function callNativeWithRetry(fn: () => void | Promise<void>, label: string, maxAttempts = 4): Promise<boolean> {
+function callNativeWithRetry(
+  fn: () => void | Promise<void>,
+  label: string,
+  { shouldAbort, maxAttempts = 4 }: RetryOptions = {}
+): Promise<boolean> {
   return new Promise((resolve) => {
     const attempt = async (n: number) => {
+      if (shouldAbort?.()) {
+        resolve(false);
+        return;
+      }
       try {
         // Awaiting works uniformly whether fn() is sync (e.g. play()) or
         // returns a Promise (e.g. seekTo()) — for the latter, this also
@@ -84,9 +105,9 @@ function callNativeWithRetry(fn: () => void | Promise<void>, label: string, maxA
  * itself, not a one-off command glitch. Reactivating the audio mode
  * re-establishes the session before trying play() once more.
  */
-async function playWithRecovery(player: AudioPlayer): Promise<void> {
-  const ok = await callNativeWithRetry(() => player.play(), 'play');
-  if (ok) return;
+async function playWithRecovery(player: AudioPlayer, shouldAbort?: () => boolean): Promise<void> {
+  const ok = await callNativeWithRetry(() => player.play(), 'play', { shouldAbort });
+  if (ok || shouldAbort?.()) return;
   try {
     await setAudioModeAsync({
       playsInSilentMode: true,
@@ -97,7 +118,7 @@ async function playWithRecovery(player: AudioPlayer): Promise<void> {
     // Best-effort — still worth retrying play() below even if this itself
     // failed to report success.
   }
-  await callNativeWithRetry(() => player.play(), 'play (after session reactivation)');
+  await callNativeWithRetry(() => player.play(), 'play (after session reactivation)', { shouldAbort });
 }
 
 interface BismillahClip {
@@ -435,7 +456,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     (async () => {
-      const replaced = await callNativeWithRetry(() => player.replace({ uri }), 'replace');
+      const replaced = await callNativeWithRetry(() => player.replace({ uri }), 'replace', {
+        shouldAbort: () => cancelled,
+      });
       if (cancelled) return;
       if (!replaced) {
         // Retries exhausted — reset loadedUriRef so a later change (retry,
@@ -458,11 +481,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
               artist: reciter.name,
               albumTitle: 'Tilawah',
             }),
-          'setActiveForLockScreen'
+          'setActiveForLockScreen',
+          { shouldAbort: () => cancelled }
         );
       }
 
-      if (isPlaying) playWithRecovery(player);
+      if (isPlaying) playWithRecovery(player, () => cancelled);
     })();
 
     // Loading ayah 1's own file while not in Bismillah phase means we've
@@ -478,8 +502,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!uri) return;
-    if (isPlaying && !status.playing) playWithRecovery(player);
-    if (!isPlaying && status.playing) callNativeWithRetry(() => player.pause(), 'pause');
+    let cancelled = false;
+    if (isPlaying && !status.playing) playWithRecovery(player, () => cancelled);
+    if (!isPlaying && status.playing) {
+      callNativeWithRetry(() => player.pause(), 'pause', { shouldAbort: () => cancelled });
+    }
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, uri]);
 
@@ -514,8 +544,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     if (bismillahPhase) {
       setBismillahBypassed(true);
     } else if (repeatMode === 'ayah') {
-      callNativeWithRetry(() => player.seekTo(0), 'seekTo (ayah repeat)').then((seeked) => {
-        if (seeked) playWithRecovery(player);
+      const shouldAbort = () => loadedUriRef.current !== uri;
+      callNativeWithRetry(() => player.seekTo(0), 'seekTo (ayah repeat)', { shouldAbort }).then((seeked) => {
+        if (seeked) playWithRecovery(player, shouldAbort);
       });
     } else if (ayahIndex < ayahs.length - 1) {
       setAyahIndex(ayahIndex + 1);
@@ -577,7 +608,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       isBuffering: status.isBuffering,
       progress: duration > 0 ? currentTime / duration : 0,
       seekToFraction: (fraction) => {
-        if (duration > 0) callNativeWithRetry(() => player.seekTo(fraction * duration), 'seekTo (scrub)');
+        if (duration > 0) {
+          callNativeWithRetry(() => player.seekTo(fraction * duration), 'seekTo (scrub)', {
+            shouldAbort: () => loadedUriRef.current !== uri,
+          });
+        }
       },
       activeWordRange,
       bismillahWordCount,
@@ -593,6 +628,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     player,
     activeWordRange,
     bismillahWordCount,
+    uri,
   ]);
 
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
