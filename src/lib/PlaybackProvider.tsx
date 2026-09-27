@@ -5,6 +5,7 @@ import {
   setAudioModeAsync,
   preload,
   clearAllPreloadedSources,
+  type AudioPlayer,
 } from 'expo-audio';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { getSurah } from '../data/surahs';
@@ -50,6 +51,31 @@ function callNativeWithRetry(fn: () => void | Promise<void>, label: string, maxA
     };
     attempt(1);
   });
+}
+
+/**
+ * Wraps a play() attempt with one escalation step beyond plain retries: if
+ * callNativeWithRetry's backoff still doesn't recover, the underlying
+ * AVAudioSession's own bookkeeping may itself be stale (not just the one
+ * command) — a persistent "Session lookup failed" error survived every
+ * plain retry attempt in testing, and that phrasing points at the session
+ * itself, not a one-off command glitch. Reactivating the audio mode
+ * re-establishes the session before trying play() once more.
+ */
+async function playWithRecovery(player: AudioPlayer): Promise<void> {
+  const ok = await callNativeWithRetry(() => player.play(), 'play');
+  if (ok) return;
+  try {
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: 'duckOthers',
+    });
+  } catch {
+    // Best-effort — still worth retrying play() below even if this itself
+    // failed to report success.
+  }
+  await callNativeWithRetry(() => player.play(), 'play (after session reactivation)');
 }
 
 interface BismillahClip {
@@ -339,7 +365,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      if (isPlaying) callNativeWithRetry(() => player.play(), 'play');
+      if (isPlaying) playWithRecovery(player);
     })();
 
     // Loading ayah 1's own file while not in Bismillah phase means we've
@@ -355,7 +381,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!uri) return;
-    if (isPlaying && !status.playing) callNativeWithRetry(() => player.play(), 'play');
+    if (isPlaying && !status.playing) playWithRecovery(player);
     if (!isPlaying && status.playing) callNativeWithRetry(() => player.pause(), 'pause');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, uri]);
@@ -374,7 +400,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setBismillahBypassed(true);
     } else if (repeatMode === 'ayah') {
       callNativeWithRetry(() => player.seekTo(0), 'seekTo (ayah repeat)').then((seeked) => {
-        if (seeked) callNativeWithRetry(() => player.play(), 'play (ayah repeat)');
+        if (seeked) playWithRecovery(player);
       });
     } else if (ayahIndex < ayahs.length - 1) {
       setAyahIndex(ayahIndex + 1);
