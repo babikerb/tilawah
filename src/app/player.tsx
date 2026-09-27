@@ -31,8 +31,10 @@ export default function PlayerScreen() {
   const reciterId = usePlayerStore((s) => s.reciterId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const repeatMode = usePlayerStore((s) => s.repeatMode);
+  const autoplayEnabled = usePlayerStore((s) => s.autoplayEnabled);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const cycleRepeatMode = usePlayerStore((s) => s.cycleRepeatMode);
+  const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
   const setReciter = usePlayerStore((s) => s.setReciter);
 
   const {
@@ -135,12 +137,12 @@ export default function PlayerScreen() {
         <View style={styles.bottomRow}>
           <Pressable
             onPress={cycleRepeatMode}
-            style={[styles.repeatButton, repeatMode !== 'off' && styles.repeatButtonActive]}
+            style={[styles.pillButton, repeatMode !== 'off' && styles.pillButtonActive]}
             accessibilityRole="button"
             accessibilityLabel={`Repeat: ${repeatMode}. Tap to change.`}
           >
             <RepeatIcon size={13} color={repeatMode !== 'off' ? colors.green : colors.inkMuted} />
-            <Text style={[styles.repeatLabel, repeatMode !== 'off' && styles.repeatLabelActive]}>
+            <Text style={[styles.pillLabel, repeatMode !== 'off' && styles.pillLabelActive]}>
               {repeatMode === 'off' ? 'Repeat: Off' : repeatMode === 'ayah' ? 'Repeat: Ayah' : 'Repeat: Surah'}
             </Text>
           </Pressable>
@@ -149,6 +151,20 @@ export default function PlayerScreen() {
             <Text style={styles.reciterLabel}>Reciter:</Text>
             <Text style={styles.reciterName}>{reciter.name}</Text>
             <ChevronDownIcon size={7} color={colors.inkMuted} />
+          </Pressable>
+        </View>
+
+        <View style={styles.autoplayRow}>
+          <Pressable
+            onPress={toggleAutoplay}
+            style={[styles.pillButton, autoplayEnabled && styles.pillButtonActive]}
+            accessibilityRole="button"
+            accessibilityLabel={`Autoplay next surah: ${autoplayEnabled ? 'on' : 'off'}. Tap to toggle.`}
+          >
+            <NextIcon size={13} color={autoplayEnabled ? colors.green : colors.inkMuted} />
+            <Text style={[styles.pillLabel, autoplayEnabled && styles.pillLabelActive]}>
+              {autoplayEnabled ? 'Autoplay: Next Surah' : 'Autoplay: Off'}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -231,7 +247,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  repeatButton: {
+  autoplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  pillButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -241,16 +262,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  repeatButtonActive: {
+  pillButtonActive: {
     backgroundColor: colors.greenLight,
     borderColor: colors.green,
   },
-  repeatLabel: {
+  pillLabel: {
     fontFamily: fonts.ui,
     fontSize: 12,
     color: colors.inkMuted,
   },
-  repeatLabelActive: {
+  pillLabelActive: {
     fontFamily: fonts.uiMedium,
     color: colors.green,
   },
