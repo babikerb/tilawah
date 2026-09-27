@@ -80,10 +80,6 @@ async function playWithRecovery(player: AudioPlayer): Promise<void> {
 
 interface BismillahClip {
   audioUrl: string;
-  /** This reciter's Al-Fatihah-ayah-1 word segments, reused as the
-   * Bismillah clip's own highlighting — it's a real, independent recitation
-   * of exactly this phrase, not a guess. */
-  segments: WordSegment[] | null;
 }
 
 interface PlaybackContextValue {
@@ -249,22 +245,21 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   // The Bismillah clip is just this reciter's Al-Fatihah ayah 1 — a real
   // recording, reusable across every surah, so it's fetched once per
-  // reciter (not per surah) and cached here for reuse.
+  // reciter (not per surah) and cached here for reuse. It plays plainly in
+  // the background before ayah 1, with no highlighting or word-tracking of
+  // its own, so it needs only the audio URL — not word-timing data.
   useEffect(() => {
     let cancelled = false;
     // Resetting to "no clip yet" for the newly-selected reciter before the
     // request resolves is intentional, not a synchronization bug.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBismillahClip(null);
-    Promise.all([fetchSurahAyahs(1, reciter.edition), fetchWordTiming(1, reciter.edition)])
-      .then(([fatihahAyahs, fatihahTiming]) => {
+    fetchSurahAyahs(1, reciter.edition)
+      .then((fatihahAyahs) => {
         if (cancelled) return;
         const bismillahAyah = fatihahAyahs[0];
         if (!bismillahAyah?.audioUrl) return;
-        setBismillahClip({
-          audioUrl: bismillahAyah.audioUrl,
-          segments: fatihahTiming?.get(1) ?? null,
-        });
+        setBismillahClip({ audioUrl: bismillahAyah.audioUrl });
       })
       .catch(() => {});
     return () => {
@@ -424,13 +419,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // moment. loadedUriRef only catches up to `uri` once that effect has
     // run, so this correctly reads as "not ready yet" right after a switch.
     if (loadedUriRef.current !== uri) return null;
+    // The Bismillah clip just plays plainly in the background — no
+    // highlighting or word-tracking of its own.
+    if (bismillahPhase) return null;
     const ms = status.currentTime * 1000;
-    if (bismillahPhase) {
-      const segments = bismillahClip?.segments;
-      if (!segments) return null;
-      const segment = segments.find(([, , start, end]) => ms >= start && ms <= end);
-      return segment ? [segment[0], segment[1]] : null;
-    }
     const ayah = ayahs[ayahIndex];
     const segments = ayah ? wordTimingBySurah?.get(ayah.numberInSurah) : undefined;
     if (!segments) return null;
@@ -444,7 +436,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // bismillahWordCount lines the two back up; it's 0 for every ayah
     // except ayah 1, so this is a no-op everywhere else.
     return [segment[0] + bismillahWordCount, segment[1] + bismillahWordCount];
-  }, [ayahs, ayahIndex, wordTimingBySurah, status.currentTime, uri, bismillahPhase, bismillahClip, bismillahWordCount]);
+  }, [ayahs, ayahIndex, wordTimingBySurah, status.currentTime, uri, bismillahPhase, bismillahWordCount]);
 
   const value = useMemo<PlaybackContextValue>(() => {
     const duration = status.duration;
