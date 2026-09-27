@@ -10,22 +10,6 @@ export const RECITERS: Reciter[] = [
     style: 'Hafs · Mujawwad',
   },
   {
-    id: 'abdulbasit',
-    edition: 'ar.abdulbasitmurattal',
-    name: 'Abdul Basit',
-    arabic: 'عبد الباسط',
-    origin: 'Egypt',
-    style: 'Hafs · Mujawwad',
-  },
-  {
-    id: 'husary',
-    edition: 'ar.husary',
-    name: 'Mahmoud Al-Husary',
-    arabic: 'محمود الحصري',
-    origin: 'Egypt',
-    style: 'Hafs · Murattal',
-  },
-  {
     id: 'sudais',
     edition: 'ar.abdurrahmaansudais',
     name: 'Abdur-Rahman As-Sudais',
@@ -39,6 +23,14 @@ export const RECITERS: Reciter[] = [
     name: 'Al-Minshawi',
     arabic: 'المنشاوي',
     origin: 'Egypt',
+    style: 'Hafs · Murattal',
+  },
+  {
+    id: 'mahermuaiqly',
+    edition: 'ar.mahermuaiqly',
+    name: 'Maher Al-Muaiqly',
+    arabic: 'ماهر المعيقلي',
+    origin: 'Saudi Arabia',
     style: 'Hafs · Murattal',
   },
 ];

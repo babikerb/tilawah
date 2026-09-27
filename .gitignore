@@ -42,3 +42,8 @@ yarn-error.*
 
 # Claude Code session state
 .claude/scheduled_tasks.lock
+
+# Raw QUL account exports (scripts/download-qul-export.mjs) — never commit
+# these directly; only the verified, converted per-surah files under
+# wordtiming/ are meant to end up in the repo.
+/qul-exports/

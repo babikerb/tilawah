@@ -209,6 +209,94 @@ displayed ayah to auto-sync with what's playing:
     falls back to ayah 1's own combined file with no split for that one
     visit (rather than block playback waiting on it) — Bismillah is still
     heard, just via the old embedded path that one time.
+  - **Fixed: Bismillah silently skipped on most surahs, not just the
+    first one or two.** Root cause: the clip's `audioUrl` is the exact same
+    file across every surah for a given reciter, but the "have we already
+    started loading this" guard in the load-current-uri effect compared raw
+    `uri` strings — and `uri` was that effect's *only* dependency. If a
+    bismillah-eligible surah was swapped to again (or repeat-surah looped
+    back to ayah 1) before the previous surah's clip had naturally finished,
+    `uri` recomputed to a string already equal to what was loaded — React
+    saw no dependency change and never re-ran the effect at all, so the
+    native player just kept playing whatever was left of the *previous*
+    surah's clip instance instead of restarting for the new one. Explains
+    exactly the reported symptom: the first surah played always gets a
+    genuinely fresh load (nothing loaded yet to collide with), but picking
+    another surah before that clip finished silently dropped it from then
+    on. Fixed by introducing `requestKey` (`uri`, except during the
+    Bismillah phase it's `bismillah:${bismillahVisitId}`, a counter bumped
+    on every fresh arrival at ayah 1) and keying the load effect and its
+    staleness guards (arm-for-finish, didJustFinish, scrub/seek abort
+    checks, word-highlight bleed-over guard) off that instead of the raw
+    URL — so a repeated file is still recognized as a new playback request.
+  - **Fixed (second bug, same symptom): Bismillah skipped when switching
+    surahs from anywhere other than ayah 1.** Only manifested when the
+    surah swap required `ayahIndex` to actually change to 0 (i.e. you
+    weren't already sitting on ayah 1) — confirmed via user repro:
+    listened partway into a surah, then swapped, and the new surah's
+    Bismillah never played. Root cause: switching surahs resets `ayahIndex`
+    to 0 in one render, but the new surah's `ayahs` array doesn't arrive
+    until its fetch resolves — the *previous* surah's `ayahs` was left
+    sitting in state in the meantime (deliberately, for reciter switches,
+    to keep old content playing gracefully — see hasFallbackContent). In
+    the in-between render where `ayahIndex` is already 0 but `ayahs` is
+    still the old surah's, `uri` fell through to `ayahs[0]?.audioUrl` —
+    the *old* surah's own ayah-1 file, a real, validly-loadable URL. The
+    load-current-uri effect can't tell that apart from a deliberate
+    "play ayah 1 directly" decision, so it committed to that stale file
+    and locked in `bismillahBypassed = true` for the new surah in the very
+    same render the bypass-reset effect was trying to clear that flag —
+    two effects racing over one flag in the same commit, and the wrong one
+    ran later. Fixed by clearing `ayahs` to `[]` (not just resetting
+    `ayahIndex`) the moment a genuine surah change starts, so that
+    transitional render correctly resolves `uri` to `null` instead of a
+    stale-but-valid file, and the load effect never fires (let alone locks
+    in the bypass) until real data — or the Bismillah clip — is ready.
+  - **Fixed: long pause between Bismillah finishing and ayah 1 actually
+    starting.** The whole-surah preload sweep (below) started the instant a
+    surah's `ayahs` arrived, which is *seconds* before the Bismillah clip
+    finishes playing — so for that whole window it was sequentially
+    downloading ayah 2, ayah 3, etc. in the background, still mid-download
+    exactly when ayah 1's own (deliberately not preloaded — see that
+    section's comment) cold fetch needed to start. Ayah 1 wasn't slow on its
+    own; it was competing for bandwidth against a sweep that already had a
+    head start on it. Fixed by holding the whole sweep off until the
+    Bismillah question is actually settled for this visit (played through,
+    or bypassed) — i.e. until ayah 1's own fetch has already begun — instead
+    of starting on a fixed timer with no relationship to the clip's actual
+    playback length.
+  - **Added: Maher Al-Muaiqly, with highlighting.** Sourced word-timing
+    data from [QUL](https://qul.tarteel.ai) (Quranic Universal Library, by
+    Tarteel AI) instead of `quran-align` — the latter only ever covered 12
+    reciters and doesn't include him. See `wordtiming/ATTRIBUTION.md` for
+    the license caveat (informal permission, not a formal open-license
+    grant like quran-align's) and the audio-identity verification. Getting
+    this reciter working surfaced and fixed a real, previously-undiscovered
+    bug: QUL's alignment counts certain Arabic vocative/compound
+    constructions (يَٰمُوسَىٰ "O Moses", هَٰٓأَنتُمْ "here you are", بَعْدَمَا
+    "after that", etc.) as their true 2-3 spoken words, while this app's
+    own `splitAyahWords` (`src/lib/arabicWords.ts`) — shared with the
+    already-shipping quran-align-derived reciters, which use the
+    single-glued-word convention — keeps them as one displayed word.
+    Changing `splitAyahWords` itself to match QUL would have broken the 3
+    existing reciters' alignment, so the fix lives entirely in a new
+    one-off conversion tool (`scripts/convert-qul-wordtiming.mjs`) that
+    reconciles QUL's per-word indices onto this app's existing word
+    boundaries without touching the shared splitter. Verified against all
+    6,236 ayahs of Maher's export: the reconciliation rule accounts for
+    every mismatch except 4 ayahs, where this specific recording didn't
+    pause cleanly between two vocative words (a per-recording audio
+    judgment call, not a text-rule gap) — those 4 ayahs ship with no
+    highlighting rather than a guessed mapping. `scripts/download-qul-export.mjs`
+    (a separate one-off tool, run locally with the developer's own QUL
+    account credentials via env vars — never committed) discovers and
+    downloads every QUL recitation resource tagged "with segments" for
+    reuse if more reciters are added later this way.
+  - **Investigated and rejected: Yasser Al-Dosari, Saad Al-Ghamdi, Abdullah
+    Al-Juhani.** None have usable per-ayah audio on this app's audio source
+    (Al Quran Cloud API) — Al-Dosari and Al-Juhani only have full-surah
+    editions, Al-Ghamdi has no edition at all — so none could be added
+    regardless of word-timing data. Not pursued further.
 
 ## Orientation lock
 
