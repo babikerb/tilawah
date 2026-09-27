@@ -109,7 +109,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     ayahIndex === 0 && bismillahBypassed && bismillahBoundary ? bismillahBoundary.endMs / 1000 : 0;
 
   const uri = (bismillahPhase ? bismillahClip?.audioUrl : ayahs[ayahIndex]?.audioUrl) || null;
-  const player = useAudioPlayer(uri ? { uri } : null, { updateInterval: 100 });
+  // Passing a changing `{ uri }` object here (instead of a stable initial
+  // value) would make the hook itself recreate — release and reconstruct —
+  // the underlying native player on every ayah/Bismillah change, racing our
+  // own `player.replace()` call below (two independent source-swap
+  // mechanisms fighting over the same transition). That's a real
+  // use-after-release crash risk on the native side, worse for slower/larger
+  // loads — which is exactly the Bismillah-clip-to-ayah-1 handoff, since
+  // that's always a real cross-file switch. `null` here plus exclusively
+  // using `.replace()` in an effect is Expo's own documented pattern for
+  // this (see the `downloadFirst` example in the expo-audio docs).
+  const player = useAudioPlayer(null, { updateInterval: 100 });
   const status = useAudioPlayerStatus(player);
 
   const loadedUriRef = useRef<string | null>(null);
