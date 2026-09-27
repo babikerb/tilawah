@@ -24,16 +24,20 @@ export function AyahCard({ loading, error, ayahs, index, onSelectIndex, juzText,
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {loading ? (
-          <ActivityIndicator color={colors.green} />
-        ) : error ? (
-          <Text style={styles.errorText}>{error}</Text>
-        ) : ayah ? (
+        {ayah ? (
+          // Prefer showing whatever ayah content we already have — e.g. while
+          // a reciter switch loads quietly in the background — over a loading
+          // spinner or error that would otherwise interrupt already-working
+          // content and playback.
           <>
             <Text style={styles.arabic}>{ayah.arabic}</Text>
             <View style={styles.divider} />
             <Text style={styles.translation}>{ayah.translation}</Text>
           </>
+        ) : loading ? (
+          <ActivityIndicator color={colors.green} />
+        ) : error ? (
+          <Text style={styles.errorText}>{error}</Text>
         ) : null}
       </ScrollView>
 

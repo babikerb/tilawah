@@ -29,9 +29,11 @@ const PlaybackContext = createContext<PlaybackContextValue | null>(null);
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const currentSurahId = usePlayerStore((s) => s.currentSurahId);
   const reciter = usePlayerStore((s) => s.reciter());
+  const reciterId = usePlayerStore((s) => s.reciterId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const repeat = usePlayerStore((s) => s.repeat);
   const setPlaying = usePlayerStore((s) => s.setPlaying);
+  const setReciter = usePlayerStore((s) => s.setReciter);
 
   const [ayahs, setAyahs] = useState<Ayah[]>([]);
   const [ayahIndex, setAyahIndex] = useState(0);
@@ -44,6 +46,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const loadedUriRef = useRef<string | null>(null);
   const lastSurahIdRef = useRef<number | null>(null);
+  const lastGoodReciterIdRef = useRef<string>(reciterId);
 
   useEffect(() => {
     setAudioModeAsync({
@@ -56,25 +59,43 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Fetch ayah text + this reciter's per-ayah audio whenever the surah or
   // reciter changes. A surah change resets to ayah 1; a reciter change on
   // the same surah keeps the current ayah (just reloads its audio source).
+  //
+  // Switching reciters mid-playback must be graceful: the old reciter's
+  // audio and ayah text stay on screen and keep playing uninterrupted until
+  // the new data is ready, and a failed switch reverts the store's
+  // reciterId (so the reciter sheet doesn't show a selection that never
+  // actually loaded) instead of surfacing a scary error over content that's
+  // still playing fine.
   useEffect(() => {
     if (!currentSurahId) return;
     const isNewSurah = lastSurahIdRef.current !== currentSurahId;
+    const hasFallbackContent = !isNewSurah && ayahs.length > 0;
     lastSurahIdRef.current = currentSurahId;
     let cancelled = false;
-    // Resetting fetch state for the newly-selected surah/reciter before the
-    // request resolves is intentional here, not a synchronization bug.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
+    // Only show the blocking loading state when there's nothing to fall
+    // back on (first-ever load of a surah); a reciter switch loads quietly
+    // in the background while the previous reciter keeps playing.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (!hasFallbackContent) setLoading(true);
     setError(null);
     if (isNewSurah) setAyahIndex(0);
+    /* eslint-enable react-hooks/set-state-in-effect */
     fetchSurahAyahs(currentSurahId, reciter.edition)
       .then((data) => {
         if (cancelled) return;
+        lastGoodReciterIdRef.current = reciter.id;
         setAyahs(data);
         setAyahIndex((i) => (isNewSurah ? 0 : Math.min(i, data.length - 1)));
       })
       .catch(() => {
-        if (!cancelled) setError('Could not load this surah. Check your connection.');
+        if (cancelled) return;
+        if (hasFallbackContent) {
+          // Revert the store selection to the reciter that's still actually
+          // playing, rather than leaving it pointed at a broken one.
+          setReciter(lastGoodReciterIdRef.current);
+        } else {
+          setError('Could not load this surah. Check your connection.');
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -82,6 +103,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSurahId, reciter.edition]);
 
   // Preload every ayah's audio for the whole surah as soon as it loads, so
