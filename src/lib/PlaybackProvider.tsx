@@ -7,6 +7,7 @@ import {
   clearAllPreloadedSources,
   type AudioPlayer,
 } from 'expo-audio';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { getSurah } from '../data/surahs';
 import { fetchSurahAyahs } from './quranApi';
@@ -15,6 +16,27 @@ import type { Ayah } from '../data/types';
 
 /** بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ — always exactly 4 words. */
 const BISMILLAH_WORD_COUNT = 4;
+
+const BISMILLAH_CACHE_PREFIX = 'tilawah:bismillah:';
+
+/** Each reciter's Bismillah clip is the exact same recording (their own
+ * Al-Fatihah ayah 1) on every surah, so it's persisted once fetched —
+ * later app launches get it instantly instead of racing a fresh network
+ * request against the surah's own ayahs loading. */
+async function loadCachedBismillahClip(edition: string): Promise<{ audioUrl: string } | null> {
+  try {
+    const raw = await AsyncStorage.getItem(BISMILLAH_CACHE_PREFIX + edition);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { audioUrl?: string };
+    return parsed.audioUrl ? { audioUrl: parsed.audioUrl } : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedBismillahClip(edition: string, clip: { audioUrl: string }): void {
+  AsyncStorage.setItem(BISMILLAH_CACHE_PREFIX + edition, JSON.stringify(clip)).catch(() => {});
+}
 
 /**
  * iOS's shared media server (`mediaserverd`) can crash and restart under
@@ -146,8 +168,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Play the Bismillah as its own clip whenever we're freshly at ayah 1 of
   // an eligible surah and haven't already gotten through it this visit.
   const bismillahPhase = ayahIndex === 0 && !bismillahBypassed && bismillahEligible && !!bismillahClip;
+  // Eligible for a Bismillah clip that just hasn't loaded yet (and we
+  // haven't given up waiting for it — see the grace-period effect below).
+  // Falling straight through to ayah 1's own audio the instant its ayahs
+  // happened to resolve before the clip did — two independent network
+  // requests racing each other — meant the clip was often silently skipped
+  // by pure timing luck instead of actually being unavailable.
+  const waitingForBismillahClip = ayahIndex === 0 && bismillahEligible && !bismillahBypassed && !bismillahClip;
 
-  const uri = (bismillahPhase ? bismillahClip?.audioUrl : ayahs[ayahIndex]?.audioUrl) || null;
+  const uri = bismillahPhase
+    ? bismillahClip?.audioUrl || null
+    : waitingForBismillahClip
+      ? null
+      : ayahs[ayahIndex]?.audioUrl || null;
   // Passing a changing `{ uri }` object here (instead of a stable initial
   // value) would make the hook itself recreate — release and reconstruct —
   // the underlying native player on every ayah/Bismillah change, racing our
@@ -248,18 +281,31 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // reciter (not per surah) and cached here for reuse. It plays plainly in
   // the background before ayah 1, with no highlighting or word-tracking of
   // its own, so it needs only the audio URL — not word-timing data.
+  //
+  // Also checked against a persisted cache (see loadCachedBismillahClip)
+  // first: fetching it fresh over the network races the target surah's own
+  // ayahs loading, and if the ayahs happened to resolve first, ayah 1 would
+  // commit to playing directly and permanently skip the Bismillah for that
+  // visit (see the grace-period effect below) — purely by network timing
+  // luck. A persisted clip sidesteps that race entirely on every launch
+  // after the first.
   useEffect(() => {
     let cancelled = false;
     // Resetting to "no clip yet" for the newly-selected reciter before the
     // request resolves is intentional, not a synchronization bug.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBismillahClip(null);
+    loadCachedBismillahClip(reciter.edition).then((cached) => {
+      if (!cancelled && cached) setBismillahClip(cached);
+    });
     fetchSurahAyahs(1, reciter.edition)
       .then((fatihahAyahs) => {
         if (cancelled) return;
         const bismillahAyah = fatihahAyahs[0];
         if (!bismillahAyah?.audioUrl) return;
-        setBismillahClip({ audioUrl: bismillahAyah.audioUrl });
+        const clip = { audioUrl: bismillahAyah.audioUrl };
+        setBismillahClip(clip);
+        saveCachedBismillahClip(reciter.edition, clip);
       })
       .catch(() => {});
     return () => {
@@ -275,6 +321,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }
     prevAyahIndexForBismillahRef.current = ayahIndex;
   }, [ayahIndex]);
+
+  // Give the Bismillah clip a few seconds to load before giving up and
+  // playing ayah 1 directly — genuinely unavailable (fetch failed, or this
+  // reciter's Al-Fatihah is missing audio) shouldn't mean silence forever.
+  useEffect(() => {
+    if (!waitingForBismillahClip) return;
+    const timer = setTimeout(() => setBismillahBypassed(true), 4000);
+    return () => clearTimeout(timer);
+  }, [waitingForBismillahClip]);
 
   // Preload every ayah's audio for the whole surah as soon as it loads, so
   // advancing between ayahs has no network gap. Sequential (not parallel) so

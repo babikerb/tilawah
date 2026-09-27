@@ -14,18 +14,31 @@
  *
  * Fix: merge a mark-only token into the previous real word instead of
  * giving it its own array slot, so it still displays but doesn't shift
- * indices.
+ * indices. A mark with no previous word yet — e.g. Aal-e-Imran 15, which
+ * opens with a standalone rub-el-hizb sign (۞) before its first real word
+ * — has nothing to merge backward into, so it's held and merged into the
+ * *next* real word instead; otherwise it became its own word-0, shifting
+ * every real word in the ayah's highlighting off by one.
  */
 export function splitAyahWords(arabicText: string): string[] {
   const tokens = arabicText.split(/\s+/).filter(Boolean);
   const words: string[] = [];
+  let pendingLeadingMarks = '';
   for (const token of tokens) {
-    if (isStopMarkOnly(token) && words.length > 0) {
-      words[words.length - 1] += token;
+    if (isStopMarkOnly(token)) {
+      if (words.length > 0) {
+        words[words.length - 1] += token;
+      } else {
+        pendingLeadingMarks += token;
+      }
     } else {
-      words.push(token);
+      words.push(pendingLeadingMarks + token);
+      pendingLeadingMarks = '';
     }
   }
+  // Only reachable if an ayah's text were nothing but marks, which doesn't
+  // happen in practice — kept so a mark is never silently dropped.
+  if (pendingLeadingMarks) words.push(pendingLeadingMarks);
   return words;
 }
 
