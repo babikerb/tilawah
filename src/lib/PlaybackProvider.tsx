@@ -15,6 +15,39 @@ import type { Ayah } from '../data/types';
 /** بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ — always exactly 4 words. */
 const BISMILLAH_WORD_COUNT = 4;
 
+/**
+ * iOS's shared media server (`mediaserverd`) can crash and restart under
+ * memory/CPU pressure — expo-audio's own `AudioStatus.mediaServicesDidReset`
+ * field documents this exact scenario ("the player was interrupted because
+ * the system's media daemon crashed"), and the native side already tries to
+ * recover automatically when it happens. But that recovery isn't
+ * instantaneous, and any native audio call we make from JS during that brief
+ * window throws a raw, generic error ("Server was dead when activation
+ * request was made") instead of waiting for it — busiest exactly when we're
+ * driving playback hardest (rapid ayah/reciter switching, preloading). It's
+ * a transient condition, not a real failure of the call itself, so retrying
+ * after a short, backing-off delay rides it out instead of dropping the call
+ * (or, before these call sites were guarded, crashing the app).
+ */
+function callNativeWithRetry(fn: () => void, label: string, maxAttempts = 4): Promise<boolean> {
+  return new Promise((resolve) => {
+    const attempt = (n: number) => {
+      try {
+        fn();
+        resolve(true);
+      } catch (err) {
+        if (n >= maxAttempts) {
+          console.error(`[PlaybackProvider] ${label} failed after ${n} attempts`, err);
+          resolve(false);
+          return;
+        }
+        setTimeout(() => attempt(n + 1), 250 * 2 ** (n - 1));
+      }
+    };
+    attempt(1);
+  });
+}
+
 interface BismillahBoundary {
   /** Millisecond position, within ayah 1's own audio file, where the
    * surah's real first word begins (the embedded Bismillah is everything
@@ -294,23 +327,42 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Load the current audio source (the Bismillah clip, or an ayah) whenever
   // it changes, and carry playback intent (keep playing if we were already
   // playing). Ayah 1 played after the Bismillah clip has already run seeks
-  // straight past its own embedded copy of it.
+  // straight past its own embedded copy of it. Every native call here goes
+  // through callNativeWithRetry — see its comment for why (transient
+  // media-server hiccups, not real failures).
   useEffect(() => {
     if (!uri || loadedUriRef.current === uri) return;
     loadedUriRef.current = uri;
     let cancelled = false;
-    try {
-      player.replace({ uri });
+
+    (async () => {
+      const replaced = await callNativeWithRetry(() => player.replace({ uri }), 'replace');
+      if (cancelled) return;
+      if (!replaced) {
+        // Retries exhausted — reset loadedUriRef so a later change (retry,
+        // reciter switch, next ayah) gets a fresh attempt instead of being
+        // permanently stuck thinking this uri already "loaded".
+        loadedUriRef.current = null;
+        // Reacting to a native module giving up (an external system
+        // failing), not synchronizing React state with itself.
+        setError('Could not play this audio. Try again or switch reciters.');
+        return;
+      }
+
       const surah = currentSurahId ? getSurah(currentSurahId) : undefined;
       const ayah = ayahs[ayahIndex];
       if (surah && ayah) {
-        player.setActiveForLockScreen(true, {
-          title: bismillahPhase ? `${surah.english} · Bismillah` : `${surah.english} · Ayah ${ayah.numberInSurah}`,
-          artist: reciter.name,
-          albumTitle: 'Tilawah',
-        });
+        callNativeWithRetry(
+          () =>
+            player.setActiveForLockScreen(true, {
+              title: bismillahPhase ? `${surah.english} · Bismillah` : `${surah.english} · Ayah ${ayah.numberInSurah}`,
+              artist: reciter.name,
+              albumTitle: 'Tilawah',
+            }),
+          'setActiveForLockScreen'
+        );
       }
-      if (isPlaying) player.play();
+      if (isPlaying) callNativeWithRetry(() => player.play(), 'play');
       if (skipOffsetSec > 0) {
         // `replace()` kicks off an async native load and returns immediately
         // — calling `seekTo()` right after it races that load and can
@@ -322,34 +374,26 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         // the instant it's true.
         const waitAndSeek = () => {
           if (cancelled) return;
+          let loaded = false;
           try {
-            if (player.isLoaded) {
-              player.seekTo(skipOffsetSec);
-            } else {
-              setTimeout(waitAndSeek, 20);
-            }
-          } catch (err) {
-            console.error('[PlaybackProvider] Seek past Bismillah failed', { uri }, err);
+            loaded = player.isLoaded;
+          } catch {
+            // Same transient media-server condition — just try again shortly.
+          }
+          if (loaded) {
+            callNativeWithRetry(() => player.seekTo(skipOffsetSec), 'seekTo (Bismillah skip)');
+          } else {
+            setTimeout(waitAndSeek, 20);
           }
         };
         waitAndSeek();
       }
-    } catch (err) {
-      // A native player call threw synchronously — without this catch it
-      // takes the whole app down (seen as "exception in hostfunction
-      // player.replace(...)"). Reset loadedUriRef so a later change (retry,
-      // reciter switch, next ayah) gets a fresh attempt instead of being
-      // permanently stuck thinking this uri already "loaded".
-      console.error('[PlaybackProvider] Failed to load audio source', { uri, bismillahPhase }, err);
-      loadedUriRef.current = null;
-      // Reacting to a native module throwing (an external system failing),
-      // not synchronizing React state with itself.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError('Could not play this audio. Try again or switch reciters.');
-    }
+    })();
+
     // Loading ayah 1's own file while not in Bismillah phase means we've
     // committed to this path for the current visit — lock out a late
     // Bismillah-data arrival from yanking playback back to the clip.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!bismillahPhase && ayahIndex === 0) setBismillahBypassed(true);
     return () => {
       cancelled = true;
@@ -359,8 +403,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!uri) return;
-    if (isPlaying && !status.playing) player.play();
-    if (!isPlaying && status.playing) player.pause();
+    if (isPlaying && !status.playing) callNativeWithRetry(() => player.play(), 'play');
+    if (!isPlaying && status.playing) callNativeWithRetry(() => player.pause(), 'pause');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, uri]);
 
@@ -379,8 +423,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     if (bismillahPhase) {
       setBismillahBypassed(true);
     } else if (repeatMode === 'ayah') {
-      player.seekTo(skipOffsetSec);
-      player.play();
+      callNativeWithRetry(() => player.seekTo(skipOffsetSec), 'seekTo (ayah repeat)').then((seeked) => {
+        if (seeked) callNativeWithRetry(() => player.play(), 'play (ayah repeat)');
+      });
     } else if (ayahIndex < ayahs.length - 1) {
       setAyahIndex(ayahIndex + 1);
     } else if (repeatMode === 'surah') {
@@ -431,7 +476,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       isBuffering: status.isBuffering,
       progress: displayDuration > 0 ? displayCurrentTime / displayDuration : 0,
       seekToFraction: (fraction) => {
-        if (displayDuration > 0) player.seekTo(skipOffsetSec + fraction * displayDuration);
+        if (displayDuration > 0) {
+          callNativeWithRetry(() => player.seekTo(skipOffsetSec + fraction * displayDuration), 'seekTo (scrub)');
+        }
       },
       activeWordRange,
       bismillahWordCount,
