@@ -197,6 +197,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const status = useAudioPlayerStatus(player);
 
   const loadedUriRef = useRef<string | null>(null);
+  // The uri we've *confirmed* genuinely loaded (via status.isLoaded), as
+  // opposed to loadedUriRef which just tracks which uri we've committed to
+  // loading. Guards the didJustFinish handler below against a stale
+  // "finished" signal bleeding over from the source that was just replaced
+  // — see that effect's comment for why this matters.
+  const finishArmedUriRef = useRef<string | null>(null);
   const lastSurahIdRef = useRef<number | null>(null);
   const lastGoodReciterIdRef = useRef<string>(reciterId);
   const prevAyahIndexForBismillahRef = useRef<number>(-1);
@@ -398,6 +404,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!uri || loadedUriRef.current === uri) return;
     loadedUriRef.current = uri;
+    // Not armed for a "finished" signal until we've actually confirmed this
+    // uri loaded (see the arming effect and the didJustFinish handler
+    // below) — even if this exact uri (e.g. a reused Bismillah clip) was
+    // armed before, that confirmation was for a previous load and doesn't
+    // carry over to this one.
+    finishArmedUriRef.current = null;
     let cancelled = false;
 
     (async () => {
@@ -449,6 +461,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, uri]);
 
+  // Arms the current uri for didJustFinish once we've actually confirmed it
+  // loaded, rather than the instant we merely committed to loading it.
+  useEffect(() => {
+    if (loadedUriRef.current === uri && status.isLoaded) {
+      finishArmedUriRef.current = uri;
+    }
+  }, [uri, status.isLoaded]);
+
   // When a clip finishes: the Bismillah clip hands off to ayah 1 proper.
   // Otherwise: "ayah" repeat replays the same ayah forever (doesn't
   // advance — for memorization/drilling one verse); "surah" repeat advances
@@ -457,6 +477,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // next surah (if enabled and one exists) or stops.
   useEffect(() => {
     if (!status.didJustFinish) return;
+    // Guards against a stale "finished" signal bleeding over from the
+    // source that was just replaced (e.g. expo-audio not fully clearing a
+    // completion notification when swapping the player's item) — without
+    // this, that stale signal gets reprocessed against the *new* source's
+    // (different) ayahIndex/bismillahPhase, e.g. the Bismillah clip
+    // finishing correctly hands off to ayah 1, then an inherited stale
+    // finish immediately advances past ayah 1 to ayah 2 without it ever
+    // actually playing.
+    if (finishArmedUriRef.current !== uri) return;
     // Reacting to the audio player (an external system) finishing a clip,
     // not synchronizing React state with itself.
     /* eslint-disable react-hooks/set-state-in-effect */
