@@ -70,7 +70,8 @@ export function AyahCard({
 }: AyahCardProps) {
   const ayah = ayahs[index];
   const words = ayah ? splitAyahWords(ayah.arabic) : [];
-  const bismillahWords = bismillahWordCount > 0 ? words.slice(0, bismillahWordCount) : [];
+  // The Bismillah is trimmed off the displayed ayah text entirely (it's
+  // heard as its own standalone clip before ayah 1, not shown here).
   const ayahWords = bismillahWordCount > 0 ? words.slice(bismillahWordCount) : words;
 
   return (
@@ -87,14 +88,6 @@ export function AyahCard({
           // spinner or error that would otherwise interrupt already-working
           // content and playback.
           <>
-            {bismillahWords.length > 0 && (
-              <WordText
-                words={bismillahWords}
-                indexOffset={0}
-                activeWordRange={activeWordRange}
-                style={styles.bismillah}
-              />
-            )}
             <WordText
               words={ayahWords}
               indexOffset={bismillahWordCount}
@@ -150,15 +143,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingVertical: 22,
-  },
-  bismillah: {
-    fontFamily: fonts.quran,
-    fontSize: 20,
-    color: colors.inkMuted,
-    textAlign: 'center',
-    lineHeight: 40,
-    writingDirection: 'rtl',
-    marginBottom: 10,
   },
   arabic: {
     fontFamily: fonts.quran,
