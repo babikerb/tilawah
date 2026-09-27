@@ -152,6 +152,21 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // time. Reset whenever we arrive at ayah 1 fresh.
   const [bismillahBypassed, setBismillahBypassed] = useState(false);
 
+  // Settles briefly before committing to a surah change. Rapidly tapping
+  // through several surahs (or a fast autoplay/back-to-back skip) would
+  // otherwise fire a full fetch-ayahs + fetch-word-timing + preload +
+  // native-player-load cycle for every intermediate surah tapped, even ones
+  // abandoned a moment later — wasteful, and a real source of overlapping
+  // in-flight requests and rapid-fire native calls. Only the surah the
+  // selection actually settles on triggers real work; the player screen's
+  // own header (surah title/meaning) reads currentSurahId directly from the
+  // store, so it still updates instantly on every tap regardless.
+  const [debouncedSurahId, setDebouncedSurahId] = useState<number | null>(currentSurahId);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSurahId(currentSurahId), 250);
+    return () => clearTimeout(timer);
+  }, [currentSurahId]);
+
   // The written Bismillah prefixes ayah 1's *text* for every surah except
   // Al-Fatihah (where ayah 1 *is* the Bismillah, standalone) and At-Tawbah
   // (which has none) — a fact about the Uthmani text convention. This used
@@ -164,7 +179,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // them was cutting real words off the start of the ayah instead of
   // skipping anything. Ayah 1's own audio now always plays from its own
   // start, in full; the Bismillah is heard only via the standalone clip.
-  const bismillahEligible = !!currentSurahId && currentSurahId !== 1 && currentSurahId !== 9;
+  const bismillahEligible = !!debouncedSurahId && debouncedSurahId !== 1 && debouncedSurahId !== 9;
   const bismillahWordCount = ayahIndex === 0 && bismillahEligible ? BISMILLAH_WORD_COUNT : 0;
 
   // Play the Bismillah as its own clip whenever we're freshly at ayah 1 of
@@ -219,6 +234,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Fetch ayah text + this reciter's per-ayah audio whenever the surah or
   // reciter changes. A surah change resets to ayah 1; a reciter change on
   // the same surah keeps the current ayah (just reloads its audio source).
+  // Keyed on the *debounced* surah id — see its declaration above — so
+  // rapidly tapping through several surahs only fetches the one actually
+  // settled on.
   //
   // Switching reciters mid-playback must be graceful: the old reciter's
   // audio and ayah text stay on screen and keep playing uninterrupted until
@@ -227,10 +245,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // actually loaded) instead of surfacing a scary error over content that's
   // still playing fine.
   useEffect(() => {
-    if (!currentSurahId) return;
-    const isNewSurah = lastSurahIdRef.current !== currentSurahId;
+    if (!debouncedSurahId) return;
+    const isNewSurah = lastSurahIdRef.current !== debouncedSurahId;
     const hasFallbackContent = !isNewSurah && ayahs.length > 0;
-    lastSurahIdRef.current = currentSurahId;
+    lastSurahIdRef.current = debouncedSurahId;
     let cancelled = false;
     // Only show the blocking loading state when there's nothing to fall
     // back on (first-ever load of a surah); a reciter switch loads quietly
@@ -240,7 +258,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     if (isNewSurah) setAyahIndex(0);
     /* eslint-enable react-hooks/set-state-in-effect */
-    fetchSurahAyahs(currentSurahId, reciter.edition)
+    fetchSurahAyahs(debouncedSurahId, reciter.edition)
       .then((data) => {
         if (cancelled) return;
         lastGoodReciterIdRef.current = reciter.id;
@@ -264,26 +282,26 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSurahId, reciter.edition]);
+  }, [debouncedSurahId, reciter.edition]);
 
   // Word-level highlighting is only available for a subset of reciters
   // (verified audio-identical to the source the timing data was aligned
   // against — see wordTiming.ts). A miss here just means no highlighting;
   // it never blocks or errors the surrounding ayah/audio experience.
   useEffect(() => {
-    if (!currentSurahId) return;
+    if (!debouncedSurahId) return;
     let cancelled = false;
     // Resetting to "no highlighting yet" for the newly-selected surah/reciter
     // before the request resolves is intentional, not a synchronization bug.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWordTimingBySurah(null);
-    fetchWordTiming(currentSurahId, reciter.edition).then((data) => {
+    fetchWordTiming(debouncedSurahId, reciter.edition).then((data) => {
       if (!cancelled) setWordTimingBySurah(data);
     });
     return () => {
       cancelled = true;
     };
-  }, [currentSurahId, reciter.edition]);
+  }, [debouncedSurahId, reciter.edition]);
 
   // The Bismillah clip is just this reciter's Al-Fatihah ayah 1 — a real
   // recording, reusable across every surah, so it's fetched once per
@@ -332,14 +350,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // the new surah silently inherited whatever bypassed state the previous
   // surah had ended on.
   useEffect(() => {
-    const surahChanged = prevSurahIdForBismillahRef.current !== currentSurahId;
+    const surahChanged = prevSurahIdForBismillahRef.current !== debouncedSurahId;
     const ayahJustBecameZero = prevAyahIndexForBismillahRef.current !== ayahIndex && ayahIndex === 0;
     if (ayahIndex === 0 && (surahChanged || ayahJustBecameZero)) {
       setBismillahBypassed(false);
     }
-    prevSurahIdForBismillahRef.current = currentSurahId;
+    prevSurahIdForBismillahRef.current = debouncedSurahId;
     prevAyahIndexForBismillahRef.current = ayahIndex;
-  }, [ayahIndex, currentSurahId]);
+  }, [ayahIndex, debouncedSurahId]);
 
   // Give the Bismillah clip time to load before giving up and playing ayah
   // 1 directly — genuinely unavailable (fetch failed, or this reciter's
@@ -350,6 +368,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // meaningful concurrent network activity racing the Bismillah clip's own
   // small fetch for the same bandwidth on a real device, not just the fast,
   // uncontended network this was originally tuned against.
+  // debouncedSurahId is in the dependency list (even though the effect body
+  // doesn't read it directly) specifically to force a *fresh* timer on every
+  // new surah: waitingForBismillahClip's own boolean value can stay `true`
+  // across a swap to a different surah (e.g. the previous surah's Bismillah
+  // clip never arrived either), which alone wouldn't re-run this effect —
+  // leaving a stale timer from the *old* surah to fire mid-way through the
+  // new one's own wait, cutting its grace period short.
   useEffect(() => {
     if (!waitingForBismillahClip) return;
     const timer = setTimeout(() => {
@@ -359,7 +384,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setBismillahBypassed(true);
     }, 8000);
     return () => clearTimeout(timer);
-  }, [waitingForBismillahClip]);
+  }, [waitingForBismillahClip, debouncedSurahId]);
 
   // Preload every ayah's audio for the whole surah as soon as it loads, so
   // advancing between ayahs has no network gap. Sequential (not parallel) so
