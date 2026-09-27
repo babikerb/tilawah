@@ -89,3 +89,14 @@ export function CheckIcon({ size = 9, color = '#1A1108' }: IconProps) {
     </Svg>
   );
 }
+
+export function RepeatIcon({ size = 14, color = '#1A1108' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M17 2l4 4-4 4" />
+      <Path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <Path d="M7 22l-4-4 4-4" />
+      <Path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </Svg>
+  );
+}

@@ -10,7 +10,7 @@ import { FlatIconButton } from '../components/ui/FlatIconButton';
 import { AyahCard } from '../components/player/AyahCard';
 import { ProgressScrubber } from '../components/player/ProgressScrubber';
 import { ReciterSheet } from '../components/reciter/ReciterSheet';
-import { BackIcon, ChevronDownIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from '../components/ui/icons';
+import { BackIcon, ChevronDownIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, RepeatIcon } from '../components/ui/icons';
 import { colors, fonts } from '../theme/tokens';
 import { getSurah, juzLabel } from '../data/surahs';
 import { usePlayerStore } from '../store/usePlayerStore';
@@ -30,9 +30,9 @@ export default function PlayerScreen() {
   const reciter = usePlayerStore((s) => s.reciter());
   const reciterId = usePlayerStore((s) => s.reciterId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const repeat = usePlayerStore((s) => s.repeat);
+  const repeatMode = usePlayerStore((s) => s.repeatMode);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
-  const toggleRepeat = usePlayerStore((s) => s.toggleRepeat);
+  const cycleRepeatMode = usePlayerStore((s) => s.cycleRepeatMode);
   const setReciter = usePlayerStore((s) => s.setReciter);
 
   const {
@@ -78,7 +78,7 @@ export default function PlayerScreen() {
             </Text>
           </View>
           <Text style={styles.meaning} numberOfLines={1}>
-            {surah.meaning} · {reciter.name}
+            {surah.meaning}
           </Text>
         </View>
       </View>
@@ -131,11 +131,16 @@ export default function PlayerScreen() {
         </View>
 
         <View style={styles.bottomRow}>
-          <Pressable onPress={toggleRepeat} style={styles.repeatButton} accessibilityRole="button" accessibilityLabel="Toggle repeat">
-            <View style={[styles.checkbox, repeat && styles.checkboxActive]}>
-              {repeat && <View style={styles.checkboxDot} />}
-            </View>
-            <Text style={styles.repeatLabel}>Repeat</Text>
+          <Pressable
+            onPress={cycleRepeatMode}
+            style={[styles.repeatButton, repeatMode !== 'off' && styles.repeatButtonActive]}
+            accessibilityRole="button"
+            accessibilityLabel={`Repeat: ${repeatMode}. Tap to change.`}
+          >
+            <RepeatIcon size={13} color={repeatMode !== 'off' ? colors.green : colors.inkMuted} />
+            <Text style={[styles.repeatLabel, repeatMode !== 'off' && styles.repeatLabelActive]}>
+              {repeatMode === 'off' ? 'Repeat: Off' : repeatMode === 'ayah' ? 'Repeat: Ayah' : 'Repeat: Surah'}
+            </Text>
           </Pressable>
 
           <Pressable onPress={() => sheetRef.current?.present()} style={styles.reciterButton}>
@@ -228,30 +233,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  checkbox: {
-    width: 16,
-    height: 16,
-    borderRadius: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 3,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: 'transparent',
   },
-  checkboxActive: {
+  repeatButtonActive: {
+    backgroundColor: colors.greenLight,
     borderColor: colors.green,
-  },
-  checkboxDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 1,
-    backgroundColor: colors.green,
   },
   repeatLabel: {
     fontFamily: fonts.ui,
     fontSize: 12,
-    color: colors.ink,
+    color: colors.inkMuted,
+  },
+  repeatLabelActive: {
+    fontFamily: fonts.uiMedium,
+    color: colors.green,
   },
   reciterButton: {
     flexDirection: 'row',

@@ -160,6 +160,21 @@ displayed ayah to auto-sync with what's playing:
   - `useAudioPlayer`'s `updateInterval` dropped to 100ms (from the
     default) for smoother highlight transitions between fast words.
 
+## Repeat modes
+
+Was a single on/off boolean with no indication of *what* it repeated —
+ambiguous per user feedback. Now a 3-state `repeatMode` in `usePlayerStore`
+('off' | 'ayah' | 'surah'), cycled by tapping the repeat control, with the
+current mode spelled out in the label ("Repeat: Off/Ayah/Surah") instead of
+a bare checkbox. "Ayah" replays only the current ayah forever (doesn't
+advance — for memorization/drilling one verse); "surah" behaves like the
+old `repeat: true` (advances normally, loops to ayah 1 at the end).
+
+Not done: looping a custom ayah range, or looping an ayah a fixed number of
+times then continuing. Deferred as a separate, bigger feature (needs new UI
+for range/count selection) rather than guessed at — worth a real design
+pass if wanted.
+
 ## Known simplifications vs. the Figma prototype (pre-redesign, may be stale)
 
 - Ayah pagination dots only render for surahs with ≤12 ayahs (the prototype

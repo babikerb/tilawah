@@ -35,7 +35,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const reciter = usePlayerStore((s) => s.reciter());
   const reciterId = usePlayerStore((s) => s.reciterId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const repeat = usePlayerStore((s) => s.repeat);
+  const repeatMode = usePlayerStore((s) => s.repeatMode);
   const setPlaying = usePlayerStore((s) => s.setPlaying);
   const setReciter = usePlayerStore((s) => s.setReciter);
 
@@ -175,16 +175,21 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, uri]);
 
-  // Auto-advance to the next ayah when the current clip finishes; loop back
-  // to the first ayah if repeat is on, otherwise stop at the end of the surah.
+  // When a clip finishes: "ayah" repeat replays the same ayah forever
+  // (doesn't advance — for memorization/drilling one verse); "surah" repeat
+  // advances normally and loops back to ayah 1 at the end; "off" advances
+  // normally and stops at the end of the surah.
   useEffect(() => {
     if (!status.didJustFinish) return;
     // Reacting to the audio player (an external system) finishing a clip,
     // not synchronizing React state with itself.
     /* eslint-disable react-hooks/set-state-in-effect */
-    if (ayahIndex < ayahs.length - 1) {
+    if (repeatMode === 'ayah') {
+      player.seekTo(0);
+      player.play();
+    } else if (ayahIndex < ayahs.length - 1) {
       setAyahIndex(ayahIndex + 1);
-    } else if (repeat) {
+    } else if (repeatMode === 'surah') {
       setAyahIndex(0);
     } else {
       setPlaying(false);
