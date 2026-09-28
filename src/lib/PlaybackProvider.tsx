@@ -469,12 +469,21 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     clearAllPreloadedSources().catch(() => {});
     const activeIndex = ayahIndex;
     (async () => {
-      // A short head start before hammering the network with the rest of
+      // A brief head start before hammering the network with the rest of
       // this surah's audio downloads, so ayah 1's own fetch (already under
       // way by the time this runs — see above) isn't immediately joined by
-      // this sweep's downloads competing for the same bandwidth.
+      // this sweep's downloads competing for the same bandwidth. Kept
+      // short on purpose: this sweep's very first target is ayah 2 (index
+      // 1) — the one preloaded ayah with the *least* safety margin, since
+      // it only has ayah 1's own (sometimes short, e.g. a disjointed-letter
+      // opening) playback time as its buffer before it's needed. This used
+      // to be 800ms, which was fine for the Bismillah-clip case this was
+      // originally tuned for (several seconds of clip playback as a
+      // buffer) but starved ayah 2's own preload on short first ayahs —
+      // "ayah 2 sometimes takes forever to load" was this delay, not a
+      // slow fetch.
       if (activeIndex === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        await new Promise((resolve) => setTimeout(resolve, 200));
         if (cancelled) return;
       }
       if (bismillahClip?.audioUrl && activeIndex !== 0) {
