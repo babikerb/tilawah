@@ -245,7 +245,16 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // didJustFinish effect below) — at 100ms, up to that long can pass
   // between an ayah's audio actually ending and this app finding out,
   // adding straight to the perceived gap before the next ayah starts.
-  const player = useAudioPlayer(null, { updateInterval: 35 });
+  // keepAudioSessionActive matters specifically for lock-screen/Control
+  // Center controls: without it, expo-audio's native pause() deactivates
+  // the whole audio session (its default, since most apps don't need to
+  // hold it open while paused). Deactivating tells iOS this app is done
+  // with audio for now, which is exactly what makes the Now Playing widget
+  // stop responding to remote play/pause after any app-initiated pause —
+  // the session that would receive that command is no longer active. Real
+  // media apps (Spotify included) keep the session alive through pauses
+  // for this reason.
+  const player = useAudioPlayer(null, { updateInterval: 35, keepAudioSessionActive: true });
   const status = useAudioPlayerStatus(player);
 
   // Keyed by requestKey, not raw uri — see the comment above requestKey's
@@ -583,6 +592,28 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, uri]);
+
+  // The lock screen / Control Center's play, pause, and toggle buttons (see
+  // expo-audio's native MediaController) call directly into the native
+  // player, entirely bypassing the `isPlaying` store state the effect above
+  // uses to drive playback — so without this, pressing pause there left the
+  // app still believing it was playing: the on-screen button stayed on
+  // "pause", and the *next* tap anywhere touching isPlaying wouldn't do
+  // what it visually promised (a "pause" tap while already externally
+  // paused is a no-op; the tap after *that* would then unexpectedly
+  // resume). This keeps the store in sync with reality whenever playback
+  // state changes for a reason other than our own request. Guarded on
+  // loadedRequestKeyRef matching so a stale `status.playing` reading from
+  // the previous source mid-transition (see the same guard elsewhere in
+  // this file) can't momentarily flip isPlaying off during a normal ayah
+  // advance. Safe against feedback with the effect above: by the time this
+  // runs, isPlaying and status.playing already agree, so that effect's own
+  // conditions are both false on its next pass — no fight-back.
+  useEffect(() => {
+    if (!uri || loadedRequestKeyRef.current !== requestKey) return;
+    if (status.playing !== isPlaying) setPlaying(status.playing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status.playing, requestKey]);
 
   // Arms the current request for didJustFinish once we've actually confirmed
   // it loaded, rather than the instant we merely committed to loading it.
