@@ -1,9 +1,10 @@
 # Tilawah
 
 A vintage cassette-themed Quran audio player, built with Expo + React Native.
-Browse all 114 surahs grouped by Juz, play full recitations from a choice of
-reciters, follow along with Arabic text and translation, save favorites, and
-resume where you left off.
+Browse all 114 surahs grouped by Juz, play per-ayah recitations from a choice
+of reciters (word-by-word highlighting synced to playback for the reciters
+with verified alignment data), follow along with Arabic text and translation,
+save favorites, and resume where you left off.
 
 Design source: Figma Make — *Tilawah Quran App UI Design*.
 
@@ -16,8 +17,12 @@ Design source: Figma Make — *Tilawah Quran App UI Design*.
 - **@gorhom/bottom-sheet** — reciter picker
 - **Al Quran Cloud API** (`api.alquran.cloud`) — ayah text + translation
 - **Islamic Network CDN** (`cdn.islamic.network`) — reciter audio streams
+- **[QUL](https://qul.tarteel.ai)** (Quranic Universal Library) — word-timing
+  data backing the highlighting feature for several reciters, converted
+  offline into `wordtiming/` (see `wordtiming/ATTRIBUTION.md` for sourcing and
+  license notes per reciter, and `scripts/` for the fetch/convert tooling)
 
-Both data sources are free, public, and require no API key.
+Al Quran Cloud and Islamic Network are free, public, and require no API key.
 
 ## Getting started
 
@@ -66,15 +71,18 @@ the original Figma design, and what's still open.
 ## Building for release
 
 This repo ships with an `eas.json` (development/preview/production profiles)
-but has **not** been linked to an EAS project yet. To build and submit:
+and is already linked to an EAS project (see `extra.eas.projectId` in
+`app.json`). To build and submit:
 
 ```bash
 npx eas-cli@latest login       # your Expo account
-npx eas-cli@latest init        # links this repo to an EAS project
 npx eas-cli@latest build --platform ios --profile production
 npx eas-cli@latest build --platform android --profile production
+npx eas-cli@latest submit --platform ios --profile production
+npx eas-cli@latest submit --platform android --profile production
 ```
 
 App Store / Play Store submission additionally requires your own Apple
-Developer and Google Play Console credentials — configure those with
-`eas submit` when you're ready.
+Developer and Google Play Console credentials, and (separately, configured
+directly in App Store Connect / Play Console, not this repo) a hosted privacy
+policy URL.
