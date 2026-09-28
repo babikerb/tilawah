@@ -47,6 +47,7 @@ export function ProgressScrubber({ progress, onSeek }: ProgressScrubberProps) {
   );
 
   const shown = dragValue ?? progress;
+  const percent = Math.round(clamp(shown, 0, 1) * 100);
 
   return (
     <View
@@ -57,6 +58,19 @@ export function ProgressScrubber({ progress, onSeek }: ProgressScrubberProps) {
         viewRef.current?.measure((_x, _y, _w, _h, pageX) => {
           trackXRef.current = pageX;
         });
+      }}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Playback position"
+      accessibilityValue={{ min: 0, max: 100, now: percent }}
+      accessibilityActions={[
+        { name: 'increment', label: 'Skip forward' },
+        { name: 'decrement', label: 'Skip back' },
+      ]}
+      onAccessibilityAction={(event) => {
+        const step = 0.05;
+        if (event.nativeEvent.actionName === 'increment') onSeek(clamp(progress + step, 0, 1));
+        else if (event.nativeEvent.actionName === 'decrement') onSeek(clamp(progress - step, 0, 1));
       }}
       {...panResponder.panHandlers}
     >

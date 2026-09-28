@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, fonts, radii } from '../../theme/tokens';
 import { supportsWordTiming } from '../../lib/wordTiming';
 import type { Reciter } from '../../data/types';
 
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 2,
+    borderRadius: radii.sm,
     backgroundColor: colors.goldLight,
   },
   badgeText: {

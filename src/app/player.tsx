@@ -11,7 +11,7 @@ import { AyahCard } from '../components/player/AyahCard';
 import { ProgressScrubber } from '../components/player/ProgressScrubber';
 import { ReciterSheet } from '../components/reciter/ReciterSheet';
 import { BackIcon, ChevronDownIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, RepeatIcon } from '../components/ui/icons';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, radii } from '../theme/tokens';
 import { getSurah, juzLabel } from '../data/surahs';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { usePlayback } from '../lib/PlaybackProvider';
@@ -147,7 +147,12 @@ export default function PlayerScreen() {
             </Text>
           </Pressable>
 
-          <Pressable onPress={() => sheetRef.current?.present()} style={styles.reciterButton}>
+          <Pressable
+            onPress={() => sheetRef.current?.present()}
+            style={styles.reciterButton}
+            accessibilityRole="button"
+            accessibilityLabel={`Reciter: ${reciter.name}. Tap to change.`}
+          >
             <Text style={styles.reciterLabel}>Reciter:</Text>
             <Text style={styles.reciterName}>{reciter.name}</Text>
             <ChevronDownIcon size={7} color={colors.inkMuted} />
@@ -258,7 +263,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 6,
     paddingHorizontal: 8,
-    borderRadius: 3,
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: 'transparent',
   },

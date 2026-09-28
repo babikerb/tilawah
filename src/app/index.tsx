@@ -11,7 +11,7 @@ import { EmptyState } from '../components/home/EmptyState';
 import { MiniPlayer } from '../components/home/MiniPlayer';
 import { SearchIcon, PlayIcon } from '../components/ui/icons';
 import { FlatIconButton } from '../components/ui/FlatIconButton';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, radii } from '../theme/tokens';
 import { SURAHS, getSurah } from '../data/surahs';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useLibraryStore } from '../store/useLibraryStore';
@@ -113,24 +113,33 @@ export default function HomeScreen() {
               style={styles.searchInput}
             />
             {query.length > 0 && (
-              <Pressable onPress={() => setQuery('')} hitSlop={8}>
+              <Pressable
+                onPress={() => setQuery('')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
                 <Text style={styles.clearText}>×</Text>
               </Pressable>
             )}
           </View>
 
           <View style={styles.segmented}>
-            {(['all', 'saved'] as const).map((f) => (
-              <Pressable
-                key={f}
-                onPress={() => setFilter(f)}
-                style={[styles.segment, filter === f && styles.segmentActive]}
-              >
-                <Text style={[styles.segmentText, filter === f && styles.segmentTextActive]}>
-                  {f === 'all' ? 'All' : savedIds.length > 0 ? `Saved (${savedIds.length})` : 'Saved'}
-                </Text>
-              </Pressable>
-            ))}
+            {(['all', 'saved'] as const).map((f) => {
+              const label = f === 'all' ? 'All' : savedIds.length > 0 ? `Saved (${savedIds.length})` : 'Saved';
+              return (
+                <Pressable
+                  key={f}
+                  onPress={() => setFilter(f)}
+                  style={[styles.segment, filter === f && styles.segmentActive]}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  accessibilityState={{ selected: filter === f }}
+                >
+                  <Text style={[styles.segmentText, filter === f && styles.segmentTextActive]}>{label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
@@ -219,7 +228,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 3,
+    borderRadius: radii.md,
     backgroundColor: colors.white,
     paddingHorizontal: 8,
   },
@@ -238,7 +247,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 3,
+    borderRadius: radii.md,
     overflow: 'hidden',
   },
   segment: {

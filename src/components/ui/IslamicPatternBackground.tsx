@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import Svg, { Defs, Pattern, Path, Rect } from 'react-native-svg';
+import { colors } from '../../theme/tokens';
 
 /**
  * Subtle repeating 8-point star tessellation (a traditional geometric motif,
@@ -18,11 +19,11 @@ export function IslamicPatternBackground({ opacity = 0.1 }: { opacity?: number }
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
         <Pattern id="starTile" width={tile} height={tile} patternUnits="userSpaceOnUse">
-          <Path d={square} fill="none" stroke="#FFFFFF" strokeWidth={1} strokeOpacity={opacity} />
+          <Path d={square} fill="none" stroke={colors.white} strokeWidth={1} strokeOpacity={opacity} />
           <Path
             d={diamond}
             fill="none"
-            stroke="#FFFFFF"
+            stroke={colors.white}
             strokeWidth={1}
             strokeOpacity={opacity}
             transform={`rotate(45 ${r} ${r})`}

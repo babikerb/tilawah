@@ -107,7 +107,14 @@ export function AyahCard({
       {ayahs.length > 1 && ayahs.length <= 12 && (
         <View style={styles.dots}>
           {ayahs.map((_, i) => (
-            <Pressable key={i} onPress={() => onSelectIndex(i)} hitSlop={6}>
+            <Pressable
+              key={i}
+              onPress={() => onSelectIndex(i)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Go to ayah ${i + 1}`}
+              accessibilityState={{ selected: i === index }}
+            >
               <View style={[styles.dot, i === index && styles.dotActive]} />
             </Pressable>
           ))}

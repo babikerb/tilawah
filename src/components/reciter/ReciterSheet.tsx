@@ -4,7 +4,7 @@ import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReciterRow } from './ReciterRow';
 import { CloseIcon } from '../ui/icons';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, fonts, radii } from '../../theme/tokens';
 import { RECITERS } from '../../data/reciters';
 
 interface ReciterSheetProps {
@@ -71,8 +71,8 @@ ReciterSheet.displayName = 'ReciterSheet';
 const styles = StyleSheet.create({
   sheetBg: {
     backgroundColor: colors.cream,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
   },
   handle: {
     backgroundColor: colors.border,
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 26,
     height: 26,
-    borderRadius: 3,
+    borderRadius: radii.md,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
