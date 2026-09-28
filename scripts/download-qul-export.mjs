@@ -1,18 +1,30 @@
 #!/usr/bin/env node
 // One-off dev tool — not part of the app bundle. Logs into your own QUL
-// (Quranic Universal Library, qul.tarteel.ai) account, discovers every
-// recitation resource tagged "With segments" on their public listing page,
-// and downloads each one's word-segment export (JSON or SQLite) — the
-// actual export file sits behind a login wall, but the listing/tagging
-// itself doesn't.
+// (Quranic Universal Library, qul.tarteel.ai) account, discovers recitation
+// resources on their public listing page, and downloads each one's export
+// (JSON or SQLite) — the actual export file sits behind a login wall, but
+// the listing/tagging itself doesn't.
 //
 // Usage:
-//   QUL_EMAIL=you@example.com QUL_PASSWORD=yourpassword node scripts/download-qul-export.mjs [--format=json|sqlite] [nameFilter...]
+//   QUL_EMAIL=... QUL_PASSWORD=... node scripts/download-qul-export.mjs [--format=json|sqlite] [--all] [--id=<resourceId>] [nameFilter...]
 //
-// With no nameFilter args, downloads every "with segments" resource found
-// (~59 at time of writing). Pass one or more substrings to only grab
-// matching reciters, e.g.:
+// Default (no --all): only considers resources tagged "With segments" —
+// the ones with word-level highlighting data. With no nameFilter args,
+// downloads every one found (~59 at time of writing); pass substrings to
+// narrow it, e.g.:
 //   node scripts/download-qul-export.mjs maher yasser
+//
+// --all: considers every recitation resource regardless of the "with
+// segments" tag (most don't have word-level data — just per-ayah or
+// per-surah audio/timing — but you may still want the export for other
+// reasons). Requires at least one nameFilter, so it's an explicit choice,
+// not an accidental bulk-download of everything:
+//   node scripts/download-qul-export.mjs --all noreen siddiq
+//
+// --id=<resourceId>: skip discovery/filtering entirely and download that
+// one resource id directly — use this once you have the exact id from a
+// qul.tarteel.ai/resources/recitation/<id> URL:
+//   node scripts/download-qul-export.mjs --id=401
 //
 // Credentials are read from env vars only — never hardcode them here, and
 // never commit a .env file containing them. Downloaded files are saved to
@@ -35,6 +47,9 @@ const DELAY_MS = 400;
 const rawArgs = process.argv.slice(2);
 const formatArg = rawArgs.find((a) => a.startsWith('--format='));
 const format = (formatArg ? formatArg.split('=')[1] : 'json').toLowerCase();
+const idArg = rawArgs.find((a) => a.startsWith('--id='));
+const directId = idArg ? idArg.split('=')[1] : null;
+const includeAll = rawArgs.includes('--all');
 const nameFilters = rawArgs.filter((a) => !a.startsWith('--')).map((s) => s.toLowerCase());
 
 const email = process.env.QUL_EMAIL;
@@ -42,6 +57,10 @@ const password = process.env.QUL_PASSWORD;
 
 if (!['json', 'sqlite'].includes(format)) {
   console.error(`Unknown format "${format}" — expected "json" or "sqlite".`);
+  process.exit(1);
+}
+if (includeAll && nameFilters.length === 0 && !directId) {
+  console.error('--all requires at least one name filter (to avoid bulk-downloading every resource).');
   process.exit(1);
 }
 if (!email || !password) {
@@ -150,25 +169,22 @@ function slugify(name) {
 }
 
 /** Parses the public "/resources/recitation" listing page for every card,
- * returning { id, name, searchText }. Filters to only "with segments"
- * entries — that phrase is QUL's own per-resource indicator (confirmed
- * against their docs page and cross-checked that resources without segment
- * data don't carry it), not a generic legend. This listing page itself
- * doesn't require login. */
-function parseSegmentedResources(html) {
+ * returning { id, name, searchText, hasSegments }. This listing page
+ * itself doesn't require login. Callers filter by hasSegments/name as
+ * needed — see main(). */
+function parseResources(html) {
   const results = [];
   const re = /<li id="downloadable_resource_(\d+)"[^>]*data-search="([^"]*)"/g;
   let m;
   while ((m = re.exec(html))) {
     const [, id, searchText] = m;
     const decoded = decodeEntities(searchText);
-    if (!/with segments/i.test(decoded)) continue;
     // Grab the display name from the card's own <span>NAME</span> — cleaner
     // casing/punctuation than the lowercased data-search blob.
     const windowHtml = html.slice(m.index, m.index + 1500);
     const nameMatch = windowHtml.match(/<span>([^<]+)<\/span>/);
     const name = nameMatch ? decodeEntities(nameMatch[1]) : decoded;
-    results.push({ id, name, searchText: decoded });
+    results.push({ id, name, searchText: decoded, hasSegments: /with segments/i.test(decoded) });
   }
   return results;
 }
@@ -228,25 +244,43 @@ async function downloadOne(resource, outDir) {
 }
 
 async function main() {
-  console.log('Loading the recitation resources listing...');
-  const listRes = await request(`${BASE}/resources/recitation`);
-  if (!listRes.ok) throw new Error(`Listing page returned HTTP ${listRes.status}`);
-  const listHtml = await listRes.text();
+  await login();
 
-  let candidates = parseSegmentedResources(listHtml);
-  console.log(`Found ${candidates.length} resources tagged "with segments".`);
+  let candidates;
+  if (directId) {
+    // Skip discovery entirely — fetch the resource page directly and pull
+    // its name from the <title> tag (format: "Name - recitation(...)").
+    const res = await request(`${BASE}/resources/recitation/${directId}`);
+    if (!res.ok) throw new Error(`Resource ${directId} page returned HTTP ${res.status}`);
+    const html = await res.text();
+    const titleMatch = html.match(/<title>([^<]*)<\/title>/);
+    const name = titleMatch ? decodeEntities(titleMatch[1]).split(' - ')[0].trim() : `resource-${directId}`;
+    candidates = [{ id: directId, name }];
+    console.log(`Targeting resource ${directId} directly: "${name}"`);
+  } else {
+    console.log('Loading the recitation resources listing...');
+    const listRes = await request(`${BASE}/resources/recitation`);
+    if (!listRes.ok) throw new Error(`Listing page returned HTTP ${listRes.status}`);
+    const listHtml = await listRes.text();
 
-  if (nameFilters.length > 0) {
-    candidates = candidates.filter((r) => nameFilters.some((f) => r.searchText.includes(f)));
-    console.log(`Filtered to ${candidates.length} matching: ${nameFilters.join(', ')}`);
+    const all = parseResources(listHtml);
+    candidates = includeAll ? all : all.filter((r) => r.hasSegments);
+    console.log(
+      includeAll
+        ? `Considering all ${candidates.length} recitation resources.`
+        : `Found ${candidates.length} resources tagged "with segments".`
+    );
+
+    if (nameFilters.length > 0) {
+      candidates = candidates.filter((r) => nameFilters.some((f) => r.searchText.includes(f)));
+      console.log(`Filtered to ${candidates.length} matching: ${nameFilters.join(', ')}`);
+    }
   }
 
   if (candidates.length === 0) {
     console.log('Nothing to download.');
     return;
   }
-
-  await login();
 
   const outDir = path.join(process.cwd(), 'qul-exports');
   await mkdir(outDir, { recursive: true });
