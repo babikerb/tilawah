@@ -8,6 +8,7 @@ import {
   type AudioPlayer,
 } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { addNextTrackListener, addPreviousTrackListener, enableTrackCommands, disableTrackCommands } from 'lock-screen-track-controls';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { getSurah } from '../data/surahs';
 import { fetchSurahAyahs } from './quranApi';
@@ -278,6 +279,39 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       shouldPlayInBackground: true,
       interruptionMode: 'duckOthers',
     });
+  }, []);
+
+  // Lock screen / Control Center "next track" / "previous track" buttons
+  // (iOS only — see the lock-screen-track-controls module and PLAN.md's
+  // "Lock screen / Control Center controls" section for why Android isn't
+  // covered here). Mapped onto exactly the same "next/previous ayah"
+  // behavior as the in-app transport buttons — reusing setAyahIndex means
+  // this inherits all of that state's existing correctness for free (the
+  // Bismillah bypass-reset effect reacts to ayahIndex changing regardless
+  // of what changed it). Enabled once for the app's lifetime, since this
+  // provider itself is mounted for the whole app; the listeners read
+  // ayahsLengthRef instead of closing over `ayahs.length` so they don't
+  // need to be re-subscribed on every surah change.
+  const ayahsLengthRef = useRef(0);
+  useEffect(() => {
+    ayahsLengthRef.current = ayahs.length;
+  }, [ayahs.length]);
+
+  useEffect(() => {
+    enableTrackCommands();
+    const unsubscribeNext = addNextTrackListener(() => {
+      if (ayahsLengthRef.current === 0) return;
+      setAyahIndex((i) => Math.min(ayahsLengthRef.current - 1, i + 1));
+    });
+    const unsubscribePrevious = addPreviousTrackListener(() => {
+      if (ayahsLengthRef.current === 0) return;
+      setAyahIndex((i) => Math.max(0, i - 1));
+    });
+    return () => {
+      unsubscribeNext();
+      unsubscribePrevious();
+      disableTrackCommands();
+    };
   }, []);
 
   // Fetch ayah text + this reciter's per-ayah audio whenever the surah or

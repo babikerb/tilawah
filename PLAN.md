@@ -417,13 +417,30 @@ two real bugs, both fixed:
   effect: by the time it runs, both sides already agree, so that effect's
   own conditions are false on its next pass.
 
-Not implemented: true "next track"/"previous track" lock-screen buttons
-(e.g. skip to next ayah, the way Spotify skips tracks). expo-audio's
+**"Next track"/"previous track" lock-screen buttons — implemented on iOS**
+(e.g. skip to next ayah, the way Spotify skips tracks). expo-audio's own
 `MediaController` only exposes seek-forward/backward by a fixed time
-interval, not a "different file" track-change concept — doesn't fit this
-app's per-ayah-separate-files model. Real support would need custom native
-module code (a config plugin or a local Expo module), a bigger, separate
-undertaking not attempted here.
+interval, not a "different file" track-change concept, and doesn't fit this
+app's per-ayah-separate-files model — so this needed real custom native
+code: `modules/lock-screen-track-controls/` is a local Expo module (Swift)
+that registers `MPRemoteCommandCenter`'s `nextTrackCommand`/
+`previousTrackCommand` directly — the same shared singleton expo-audio's
+own MediaController uses, just the two command properties it doesn't touch,
+so the two coexist without conflict. Emits `onNextTrack`/`onPreviousTrack`
+events consumed in `PlaybackProvider`, mapped onto the exact same
+`setAyahIndex` calls the in-app transport buttons use, so it inherits all
+of that state's existing correctness (Bismillah bypass-reset, highlighting
+`requestKey`, etc.) for free — the effect doesn't know or care whether an
+ayahIndex change came from a screen tap or a lock-screen press. Android:
+explicitly out of scope per the user's own call, not just deferred — its
+media session (as configured by expo-audio, using AndroidX Media3) actively
+*removes* `COMMAND_SEEK_TO_NEXT_MEDIA_ITEM`/`COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM`
+from the available player commands, since ExoPlayer's queue always holds
+exactly one item here too. Getting this on Android for real would mean
+forking/patching expo-audio's Android module (its session/notification
+internals aren't exposed for extension) — a materially bigger, riskier
+undertaking than the iOS side, not a symmetrical "just add the Android
+half" job.
 
 ## Over-the-air updates (EAS Update)
 
