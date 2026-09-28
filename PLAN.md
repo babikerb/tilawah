@@ -390,6 +390,54 @@ pass if wanted.
 - Reciter selector button uses a plain pressable instead of the full
   offset-shadow "stamp" treatment (only the round transport buttons get that).
 
+## Lock screen / Control Center controls
+
+expo-audio's native layer (`MediaController` on iOS) already wires play,
+pause, toggle-play-pause, seek-to-position, and optional seek-forward/back
+directly into `MPRemoteCommandCenter` whenever `setActiveForLockScreen` is
+active — this app already calls that on every ayah/Bismillah load with
+title/artist/album metadata. Reported not working in the prod build; found
+two real bugs, both fixed:
+- **Root cause: `keepAudioSessionActive` defaults to `false`.** expo-audio's
+  native `pause()` deactivates the entire audio session when this is unset,
+  which tells iOS the app is done with audio — exactly what makes the Now
+  Playing widget stop responding to remote commands after any
+  app-initiated pause (real media apps keep the session alive through
+  pauses for this reason). Fixed by passing `keepAudioSessionActive: true`
+  to `useAudioPlayer`.
+- **Second bug: one-directional state sync.** The lock screen's own
+  play/pause/toggle handlers call directly into the native player,
+  bypassing this app's `isPlaying` store state entirely — so pressing pause
+  there left the app still believing it was playing (the in-app button
+  stayed on "pause", and the *next* tap wouldn't do what it visually
+  promised). Added a reverse-sync effect that updates the store whenever
+  `status.playing` disagrees with `isPlaying`, guarded on
+  `loadedRequestKeyRef` matching so a stale status reading mid-ayah-
+  transition can't misfire it. Doesn't fight the existing forward-sync
+  effect: by the time it runs, both sides already agree, so that effect's
+  own conditions are false on its next pass.
+
+Not implemented: true "next track"/"previous track" lock-screen buttons
+(e.g. skip to next ayah, the way Spotify skips tracks). expo-audio's
+`MediaController` only exposes seek-forward/backward by a fixed time
+interval, not a "different file" track-change concept — doesn't fit this
+app's per-ayah-separate-files model. Real support would need custom native
+module code (a config plugin or a local Expo module), a bigger, separate
+undertaking not attempted here.
+
+## Over-the-air updates (EAS Update)
+
+Added `expo-updates`, `runtimeVersion: { policy: "fingerprint" }`, and an
+`updates.url` pointing at this project's EAS Update endpoint in `app.json`;
+added a matching `channel` to each `eas.json` build profile
+(development/preview/production) so a build only ever picks up updates
+published to its own channel. See README's "Over-the-air updates" section
+for the actual `eas update` command. Fingerprint-based runtime versioning
+means an update is only offered to builds whose native code it's actually
+compatible with — a change requiring a native rebuild (new native
+dependency, config plugin, anything touching `expo prebuild`) simply won't
+reach existing builds via OTA, by design.
+
 ## Not done (needs the user)
 
 - Real device/simulator verification (no iOS/Android simulator on this

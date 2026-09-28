@@ -86,3 +86,20 @@ App Store / Play Store submission additionally requires your own Apple
 Developer and Google Play Console credentials, and (separately, configured
 directly in App Store Connect / Play Console, not this repo) a hosted privacy
 policy URL.
+
+## Over-the-air updates
+
+JS/asset-only changes (no native code, no new native dependencies) can ship
+via `eas update` instead of a full store build/review cycle. Each build
+profile is wired to a matching update channel (`development`, `preview`,
+`production` — see `eas.json`), and `runtimeVersion` uses the `fingerprint`
+policy, so an update only reaches builds whose native code it's actually
+compatible with.
+
+```bash
+npx eas-cli@latest update --branch production --message "Describe the change"
+```
+
+A change that touches native code (a new native dependency, a config plugin,
+anything requiring `expo prebuild`) needs a real rebuild instead — an OTA
+update can't ship that.
