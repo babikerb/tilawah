@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '../../theme/tokens';
+import { supportsWordTiming } from '../../lib/wordTiming';
 import type { Reciter } from '../../data/types';
 
 export function ReciterRow({
@@ -14,12 +15,14 @@ export function ReciterRow({
   onSelect: () => void;
   striped: boolean;
 }) {
+  const hasHighlighting = supportsWordTiming(reciter.edition);
+
   return (
     <Pressable
       onPress={onSelect}
       style={[styles.row, striped && styles.rowStriped, selected && styles.rowSelected]}
       accessibilityRole="button"
-      accessibilityLabel={`Select ${reciter.name}`}
+      accessibilityLabel={`Select ${reciter.name}${hasHighlighting ? ', supports word highlighting' : ''}`}
     >
       <View style={[styles.radio, selected && styles.radioSelected]}>
         {selected && <View style={styles.radioDot} />}
@@ -30,9 +33,16 @@ export function ReciterRow({
           <Text style={styles.name}>{reciter.name}</Text>
           <Text style={styles.arabic}>{reciter.arabic}</Text>
         </View>
-        <Text style={styles.meta}>
-          {reciter.origin} · {reciter.style}
-        </Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.meta} numberOfLines={1}>
+            {reciter.origin} · {reciter.style}
+          </Text>
+          {hasHighlighting && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>Highlights words</Text>
+            </View>
+          )}
+        </View>
       </View>
     </Pressable>
   );
@@ -93,10 +103,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.ink,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
   meta: {
     fontFamily: fonts.ui,
     fontSize: 11,
     color: colors.inkMuted,
-    marginTop: 2,
+    flexShrink: 1,
+  },
+  badge: {
+    flexShrink: 0,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 2,
+    backgroundColor: colors.goldLight,
+  },
+  badgeText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 9,
+    color: colors.gold,
   },
 });

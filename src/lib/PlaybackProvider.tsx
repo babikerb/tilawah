@@ -239,7 +239,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // that's always a real cross-file switch. `null` here plus exclusively
   // using `.replace()` in an effect is Expo's own documented pattern for
   // this (see the `downloadFirst` example in the expo-audio docs).
-  const player = useAudioPlayer(null, { updateInterval: 100 });
+  // 100ms was already once reduced from expo-audio's default for smoother
+  // word-highlight transitions; dropped further here because the same
+  // polled status is also how `didJustFinish` gets noticed (see the
+  // didJustFinish effect below) — at 100ms, up to that long can pass
+  // between an ayah's audio actually ending and this app finding out,
+  // adding straight to the perceived gap before the next ayah starts.
+  const player = useAudioPlayer(null, { updateInterval: 35 });
   const status = useAudioPlayerStatus(player);
 
   // Keyed by requestKey, not raw uri — see the comment above requestKey's
@@ -639,7 +645,30 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     const ayah = ayahs[ayahIndex];
     const segments = ayah ? wordTimingBySurah?.get(ayah.numberInSurah) : undefined;
     if (!segments) return null;
-    const segment = segments.find(([, , start, end]) => ms >= start && ms <= end);
+    // The most recently *started* segment, not one that also still has to
+    // contain `ms` within its own end — alignment data routinely has small
+    // gaps between one word's end and the next word's start (more
+    // noticeable after a slowly-spoken word), and requiring strict
+    // containment meant the highlight blinked off for that gap. Once a
+    // word's segment has started, it stays the active one — seamlessly
+    // handing off the instant the next word's segment starts — right up
+    // through the last word of the ayah, which now stays visible until the
+    // ayah actually finishes instead of disappearing at its own nominal
+    // end time.
+    let segment: (typeof segments)[number] | null = null;
+    for (const s of segments) {
+      if (ms >= s[2] && (!segment || s[2] > segment[2])) segment = s;
+    }
+    if (!segment) {
+      // Nothing has technically "started" yet — `ms` is still in a beat of
+      // lead-in silence before the very first word's segment. Highlight
+      // that first word anyway rather than showing nothing, so the
+      // highlight is visible for the ayah's entire duration instead of
+      // only appearing partway in.
+      for (const s of segments) {
+        if (!segment || s[2] < segment[2]) segment = s;
+      }
+    }
     if (!segment) return null;
     // The alignment data's word indices for ayah 1 start at 0 for its own
     // first *real* word (that data has no Bismillah in it at all — see the

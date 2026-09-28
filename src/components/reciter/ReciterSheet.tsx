@@ -1,6 +1,7 @@
 import React, { forwardRef, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
+import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReciterRow } from './ReciterRow';
 import { CloseIcon } from '../ui/icons';
 import { colors, fonts } from '../../theme/tokens';
@@ -13,7 +14,12 @@ interface ReciterSheetProps {
 
 export const ReciterSheet = forwardRef<BottomSheetModal, ReciterSheetProps>(
   ({ selectedId, onSelect }, ref) => {
+    // A fixed snap point (not full-screen, and not dynamic sizing) so the
+    // sheet's height stays predictable regardless of how many reciters
+    // there are — the list itself scrolls internally instead of the sheet
+    // growing to fit every row.
     const snapPoints = useMemo(() => ['60%'], []);
+    const insets = useSafeAreaInsets();
 
     return (
       <BottomSheetModal
@@ -23,20 +29,26 @@ export const ReciterSheet = forwardRef<BottomSheetModal, ReciterSheetProps>(
         handleIndicatorStyle={styles.handle}
         enablePanDownToClose
       >
-        <BottomSheetView style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Select Reciter</Text>
-            <Text style={styles.titleArabic}>اختر القارئ</Text>
-            <Pressable
-              onPress={() => (ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()}
-              style={styles.closeButton}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <CloseIcon size={12} color={colors.white} />
-            </Pressable>
-          </View>
+        <View style={styles.header}>
+          <Text style={styles.title}>Select Reciter</Text>
+          <Text style={styles.titleArabic}>اختر القارئ</Text>
+          <Pressable
+            onPress={() => (ref as React.RefObject<BottomSheetModal>)?.current?.dismiss()}
+            style={styles.closeButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <CloseIcon size={12} color={colors.white} />
+          </Pressable>
+        </View>
 
+        {/* BottomSheetScrollView (not a plain ScrollView) so its internal
+            scroll gesture cooperates with the sheet's own pan-to-close
+            gesture instead of fighting it. Bottom padding includes the
+            safe-area inset so the last row clears the home indicator /
+            gesture bar on devices that have one, rather than sitting
+            right at — or under — the screen edge. */}
+        <BottomSheetScrollView contentContainerStyle={[styles.container, { paddingBottom: 20 + insets.bottom }]}>
           {RECITERS.map((r, i) => (
             <ReciterRow
               key={r.id}
@@ -49,7 +61,7 @@ export const ReciterSheet = forwardRef<BottomSheetModal, ReciterSheetProps>(
               }}
             />
           ))}
-        </BottomSheetView>
+        </BottomSheetScrollView>
       </BottomSheetModal>
     );
   }
@@ -67,7 +79,7 @@ const styles = StyleSheet.create({
     width: 36,
   },
   container: {
-    paddingBottom: 20,
+    flexGrow: 1,
   },
   header: {
     backgroundColor: colors.green,
