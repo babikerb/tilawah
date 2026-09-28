@@ -185,6 +185,25 @@ displayed ayah to auto-sync with what's playing:
     currentTime from the old ayah could coincidentally land inside a valid
     segment for the new ayah's unrelated word timing and briefly highlight
     the wrong word.
+  - **Highlight blinking off mid-ayah (fixed).** `activeWordRange` used to
+    require playback's current time to fall *within* a segment's own
+    `[start, end)` window, so any gap between one word's end and the
+    next's start — routine in forced-alignment data, and more noticeable
+    after a slowly-spoken word with a longer natural pause after it — left
+    no segment matching and the highlight blinked off entirely for that
+    gap. Changed to "the most recently *started* segment" instead: once a
+    word's segment begins, it stays the active one straight through to the
+    next word's segment starting, with no gap in between — and, for an
+    ayah's last word, all the way to the end of that ayah's audio instead
+    of disappearing at its own nominal end time. Combined with the
+    existing bleed-over guard above, a word now stays visibly highlighted
+    for the entirety of an ayah and only clears in the brief transition to
+    the next one before highlighting its first word. Also closed the
+    matching gap at the very *start* of an ayah — a beat of lead-in
+    silence before the first word's segment technically begins used to
+    show no highlight at all; now the first word lights up immediately,
+    so the highlight is continuously visible for the ayah's whole
+    duration and only ever clears between ayahs, never mid-ayah.
   - **Bismillah is now a real separate audio clip**, not just a display
     split (superseding the earlier "no separate audio needed" note below
     — the earlier version left Bismillah's duration bundled into ayah 1's
@@ -297,6 +316,45 @@ displayed ayah to auto-sync with what's playing:
     (Al Quran Cloud API) — Al-Dosari and Al-Juhani only have full-surah
     editions, Al-Ghamdi has no edition at all — so none could be added
     regardless of word-timing data. Not pursued further.
+  - **Added 6 more reciters with highlighting, 2 more without.** Same QUL
+    source, verification standard, and license basis as Maher above — see
+    `wordtiming/ATTRIBUTION.md` for the full per-reciter writeup. With
+    highlighting: Hani Rifai, Abu Bakr Ash-Shaatree, Husary, Husary
+    (Mujawwad), Abdul Basit, Saood Ash-Shuraym. Without (real per-ayah
+    audio, but QUL's "with segments"-tagged export for each turned out to
+    be an empty stub — zero real data, same as the earlier Abdullah
+    Al-Juhani finding): Abdullah Basfar, Muhammad Jibreel. Two things
+    worth remembering from this round:
+    - **QUL's on-site reciter titles for a resource aren't reliable** —
+      Husary's 3 export variants were mislabeled relative to their actual
+      content; the real identity of each only became clear from its own
+      per-ayah `audio_url` field, not its display name.
+    - **Same reciter name ≠ same recording** — `ar.abdulsamad` and
+      `ar.abdulbasitmurattal` both resolve to "Abdul Basit" on the Al
+      Quran Cloud API, but `ar.abdulsamad`'s actual audio is a completely
+      different recording (durations off by tens to hundreds of seconds
+      per ayah) from what QUL's export was built against, while
+      `ar.abdulbasitmurattal` matched byte-for-byte. Edition identifiers
+      and display names are not a substitute for verifying the audio
+      itself.
+    - Not every reciter's QUL export uses the same word-splitting
+      convention as Maher's — Hani Rifai's keeps vocative constructions as
+      one segment (matching this app's own splitter already), so
+      `convert-qul-wordtiming.mjs` now tries both conventions per reciter
+      and keeps whichever one actually reconciles against that export's
+      own data.
+  - **Ayah-transition gap reduced.** `didJustFinish` (and everything else
+    read from player status) is only noticed on the next polled status
+    update, so the audio player's `updateInterval` — already once lowered
+    for smoother word-highlight transitions — direct-contributes to the
+    perceived gap between one ayah ending and the next one starting.
+    Lowered further (100ms → 35ms) for a real, low-risk reduction in that
+    gap. A true zero-gap transition would need switching from this app's
+    current single-player-with-`.replace()` model to expo-audio's
+    `AudioPlaylist` (native `AVQueuePlayer`-backed queue, built for gapless
+    playback) — a genuine rearchitecture of Bismillah sequencing,
+    preloading, repeat modes, and the word-highlighting `requestKey`
+    system, not attempted here.
 
 ## Orientation lock
 

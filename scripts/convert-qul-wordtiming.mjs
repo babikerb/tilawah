@@ -87,9 +87,18 @@ const BADAMA = String.fromCodePoint(0x628, 0x64e, 0x639, 0x652, 0x62f, 0x64e, 0x
 const WA_ALLAWI = String.fromCodePoint(0x648, 0x64e, 0x623, 0x64e, 0x644, 0x651, 0x64e, 0x648, 0x650); // وَأَلَّوِ ("and that if") — 2 words
 
 /** How many real spoken words QUL's alignment counts a given displayed
- * token as. 1 for the overwhelming majority; >1 for a small, fixed set of
+ * token as, for reciters whose alignment *does* split these constructions
+ * (verified true for Maher Al-Muaiqly's export — see the module comment).
+ * 1 for the overwhelming majority; >1 for a small, fixed set of
  * vocative/compound constructions Quranic orthography glues into one token
- * (e.g. يَٰمُوسَىٰ = "O" + "Moses"). */
+ * (e.g. يَٰمُوسَىٰ = "O" + "Moses").
+ *
+ * Not every reciter's QUL export uses this convention — confirmed against
+ * Hani Rifai's export, whose alignment keeps these as ONE segment (the same
+ * convention this app's own splitAyahWords already uses), so applying this
+ * multiplier there produced ~366 false mismatches instead of resolving
+ * them. `convertAyahs()` below tries both conventions per reciter and picks
+ * whichever actually matches that export's own data. */
 function wordMultiplicity(word) {
   const stripped = stripLeadingMark(word);
   if (stripped === YABNA_UMMA) return 3;
@@ -102,6 +111,8 @@ function wordMultiplicity(word) {
   if (/^(?:وَ)?يَٰ/.test(stripped)) return 2;
   return 1;
 }
+
+const noMultiplicity = () => 1;
 
 async function fetchFullUthmaniText() {
   const res = await fetch('https://api.alquran.cloud/v1/quran/quran-uthmani');
@@ -116,15 +127,11 @@ async function fetchFullUthmaniText() {
   return byKey;
 }
 
-async function main() {
-  console.log('Fetching Uthmani text...');
-  const textByKey = await fetchFullUthmaniText();
-
-  console.log(`Loading QUL export from ${qulExportPath}...`);
-  const qul = JSON.parse(readFileSync(qulExportPath, 'utf8'));
-
+/** Runs the full conversion once under a given multiplicity function,
+ * returning the per-surah output plus which ayahs had to be skipped. */
+function convertAyahs(textByKey, qul, multiplicity) {
   const bySurah = new Map();
-  let skippedAyahs = [];
+  const skippedAyahs = [];
 
   for (let surah = 1; surah <= 114; surah++) {
     const ayahEntries = [];
@@ -141,7 +148,7 @@ async function main() {
         words = words.slice(BISMILLAH_WORD_COUNT);
       }
 
-      const expectedCount = words.reduce((sum, w) => sum + wordMultiplicity(w), 0);
+      const expectedCount = words.reduce((sum, w) => sum + multiplicity(w), 0);
       const actualMax = Math.max(...qulEntry.segments.map((s) => s[0]));
       if (expectedCount !== actualMax) {
         skippedAyahs.push(`${key} (expected ${expectedCount}, QUL max ${actualMax})`);
@@ -151,7 +158,7 @@ async function main() {
       // Build displayIndex boundaries: word i owns QUL indices
       // [boundary[i], boundary[i+1]).
       const boundaries = [0];
-      for (const w of words) boundaries.push(boundaries[boundaries.length - 1] + wordMultiplicity(w));
+      for (const w of words) boundaries.push(boundaries[boundaries.length - 1] + multiplicity(w));
 
       const segments = qulEntry.segments.map(([qulIndex, startMs, endMs]) => {
         const displayIndex = boundaries.findIndex((b, i) => qulIndex > b && qulIndex <= boundaries[i + 1]);
@@ -162,6 +169,28 @@ async function main() {
     }
     bySurah.set(surah, ayahEntries);
   }
+
+  return { bySurah, skippedAyahs };
+}
+
+async function main() {
+  console.log('Fetching Uthmani text...');
+  const textByKey = await fetchFullUthmaniText();
+
+  console.log(`Loading QUL export from ${qulExportPath}...`);
+  const qul = JSON.parse(readFileSync(qulExportPath, 'utf8'));
+
+  // Not every reciter's QUL export uses the vocative-splitting convention
+  // (see wordMultiplicity's comment) — try both and keep whichever actually
+  // matches this export's own data, rather than assuming.
+  const withSplit = convertAyahs(textByKey, qul, wordMultiplicity);
+  const withoutSplit = convertAyahs(textByKey, qul, noMultiplicity);
+  const { bySurah, skippedAyahs } =
+    withSplit.skippedAyahs.length <= withoutSplit.skippedAyahs.length ? withSplit : withoutSplit;
+  console.log(
+    `Using the ${withSplit.skippedAyahs.length <= withoutSplit.skippedAyahs.length ? 'vocative-splitting' : 'no-splitting'} convention ` +
+      `(${withSplit.skippedAyahs.length} vs ${withoutSplit.skippedAyahs.length} skipped ayahs).`
+  );
 
   console.log(`Skipped ${skippedAyahs.length} ayahs (audio-alignment mismatch, no highlighting for those):`);
   for (const s of skippedAyahs) console.log(`  - ${s}`);

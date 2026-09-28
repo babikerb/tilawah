@@ -3,7 +3,18 @@
  * accurate. See /wordtiming/ATTRIBUTION.md for the data source and the
  * byte-level audio verification behind this reciter list.
  */
-const WORD_TIMING_RECITERS = new Set(['ar.alafasy', 'ar.abdurrahmaansudais', 'ar.minshawi', 'ar.mahermuaiqly']);
+const WORD_TIMING_RECITERS = new Set([
+  'ar.alafasy',
+  'ar.abdurrahmaansudais',
+  'ar.minshawi',
+  'ar.mahermuaiqly',
+  'ar.hanirifai',
+  'ar.shaatree',
+  'ar.husary',
+  'ar.husarymujawwad',
+  'ar.abdulbasitmurattal',
+  'ar.saoodshuraym',
+]);
 
 export function supportsWordTiming(reciterEdition: string): boolean {
   return WORD_TIMING_RECITERS.has(reciterEdition);
